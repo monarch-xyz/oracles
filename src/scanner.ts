@@ -27,6 +27,7 @@ import type {
 export async function runScanner(): Promise<void> {
   console.log("=== Oracle Scanner Starting ===");
   const startTime = Date.now();
+  const logPerOracle = process.env.LOG_PER_ORACLE === "1";
 
   const state = await loadState();
   const feedProviderMatcher = new FeedProviderMatcher();
@@ -77,6 +78,15 @@ export async function runScanner(): Promise<void> {
       chainId,
       factoryCheckTargets
     );
+    if (factoryCheckTargets.length > 0) {
+      let trueCount = 0;
+      for (const address of factoryCheckTargets) {
+        if (factoryVerifiedMap.get(address)) trueCount += 1;
+      }
+      console.log(
+        `  [factory] multicall results: ${trueCount} true / ${factoryCheckTargets.length} total`
+      );
+    }
 
     // Process each oracle
     for (const oracleAddress of oracleAddresses) {
@@ -85,7 +95,8 @@ export async function runScanner(): Promise<void> {
         oracleAddress,
         chainState,
         feedProviderMatcher,
-        factoryVerifiedMap
+        factoryVerifiedMap,
+        logPerOracle
       );
     }
 
@@ -110,7 +121,8 @@ async function processOracle(
   oracleAddress: Address,
   chainState: ChainState,
   feedProviderMatcher: FeedProviderMatcher,
-  factoryVerifiedMap: Map<Address, boolean>
+  factoryVerifiedMap: Map<Address, boolean>,
+  logPerOracle: boolean
 ): Promise<void> {
   const now = new Date().toISOString();
 
@@ -184,9 +196,11 @@ async function processOracle(
         ? "custom"
         : "unknown";
 
-  console.log(
-    `  [${oracleAddress.slice(0, 10)}...] ${typeLabel}, proxy=${!!contractState.proxy}${isNew ? " (new)" : ""}`
-  );
+  if (logPerOracle) {
+    console.log(
+      `  [${oracleAddress.slice(0, 10)}...] ${typeLabel}, proxy=${!!contractState.proxy}${isNew ? " (new)" : ""}`
+    );
+  }
 }
 
 async function rescanUpgradableOracles(

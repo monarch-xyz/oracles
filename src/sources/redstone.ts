@@ -2,14 +2,29 @@ import { REDSTONE_REGISTRY_URL } from "../config.js";
 import type { Address, ChainId, FeedInfo, FeedProviderRegistry } from "../types.js";
 
 interface RedstoneFeed {
-  adapterContractAddress: string;
+  adapterContractAddress?: string;
   name?: string;
   dataFeeds?: string[];
+  priceFeedAddress?: string;
+  updateTriggersOverrides?: {
+    deviationPercentage?: number;
+    timeSinceLastUpdateInMilliseconds?: number;
+  };
 }
 
-interface RedstoneManifest {
-  [key: string]: RedstoneFeed;
+interface RedstoneMultiFeedManifest {
+  chain?: { name?: string; id?: number };
+  adapterContract?: string;
+  adapterContractType?: string;
+  dataServiceId?: string;
+  updateTriggers?: {
+    deviationPercentage?: number;
+    timeSinceLastUpdateInMilliseconds?: number;
+  };
+  priceFeeds?: Record<string, RedstoneFeed>;
 }
+
+type RedstoneManifest = Record<string, RedstoneFeed> | RedstoneMultiFeedManifest;
 
 const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
   1: "ethereum",
@@ -54,20 +69,45 @@ export async function fetchRedstoneProvider(
     const manifest = (await response.json()) as RedstoneManifest;
     const feeds: Record<Address, FeedInfo> = {};
 
-    for (const [key, feed] of Object.entries(manifest)) {
-      if (!feed.adapterContractAddress) continue;
+    if ("priceFeeds" in manifest && manifest.priceFeeds) {
+      for (const [key, feed] of Object.entries(manifest.priceFeeds)) {
+        if (!feed.priceFeedAddress) continue;
+        const address = feed.priceFeedAddress.toLowerCase() as Address;
+        const pair = parsePair(key);
 
-      const address = feed.adapterContractAddress.toLowerCase() as Address;
-      const dataFeeds = feed.dataFeeds || [];
-      const pair = dataFeeds.length >= 2 ? [dataFeeds[0], dataFeeds[1]] as [string, string] : null;
+        feeds[address] = {
+          address,
+          chainId,
+          provider: "Redstone",
+          description: key,
+          pair,
+          heartbeat: feed.updateTriggersOverrides?.timeSinceLastUpdateInMilliseconds
+            ? Math.floor(
+                feed.updateTriggersOverrides.timeSinceLastUpdateInMilliseconds / 1000
+              )
+            : undefined,
+          deviationThreshold: feed.updateTriggersOverrides?.deviationPercentage,
+        };
+      }
+    } else {
+      for (const [key, feed] of Object.entries(manifest)) {
+        if (!feed.adapterContractAddress) continue;
 
-      feeds[address] = {
-        address,
-        chainId,
-        provider: "Redstone",
-        description: feed.name || key,
-        pair,
-      };
+        const address = feed.adapterContractAddress.toLowerCase() as Address;
+        const dataFeeds = feed.dataFeeds || [];
+        const pair =
+          dataFeeds.length >= 2
+            ? ([dataFeeds[0], dataFeeds[1]] as [string, string])
+            : parsePair(key);
+
+        feeds[address] = {
+          address,
+          chainId,
+          provider: "Redstone",
+          description: feed.name || key,
+          pair,
+        };
+      }
     }
 
     console.log(`[redstone] Loaded ${Object.keys(feeds).length} feeds`);
@@ -87,4 +127,12 @@ export async function fetchRedstoneProvider(
       updatedAt: new Date().toISOString(),
     };
   }
+}
+
+function parsePair(key: string): [string, string] | null {
+  const match = key.match(/^(.+)\s*\/\s*(.+)$/);
+  if (match) {
+    return [match[1].trim(), match[2].trim()];
+  }
+  return null;
 }

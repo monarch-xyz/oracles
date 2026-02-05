@@ -54,6 +54,7 @@ export async function fetchFactoryVerifiedMap(
   oracleAddresses: Address[]
 ): Promise<Map<Address, boolean>> {
   const verified = new Map<Address, boolean>();
+  const logMulticall = process.env.LOG_MULTICALL === "1";
 
   if (oracleAddresses.length === 0) return verified;
 
@@ -81,6 +82,15 @@ export async function fetchFactoryVerifiedMap(
         })),
         allowFailure: true,
       });
+
+      if (logMulticall) {
+        const trueCount = results.filter(
+          (result) => result.status === "success" && result.result
+        ).length;
+        console.log(
+          `[factory] multicall batch size=${batch.length} true=${trueCount} false=${batch.length - trueCount}`
+        );
+      }
 
       results.forEach((result, index) => {
         const address = batch[index];
