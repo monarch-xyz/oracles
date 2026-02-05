@@ -6,7 +6,6 @@ const MARKETS_QUERY = `
   query Markets {
     markets(first: 1000) {
       items {
-        uniqueKey
         oracle {
           address
           chain {
@@ -19,7 +18,6 @@ const MARKETS_QUERY = `
 `;
 
 interface MarketItem {
-  uniqueKey: string;
   oracle: {
     address: string;
     chain: {
@@ -39,7 +37,6 @@ interface MarketsResponse {
 export interface OracleFromApi {
   address: Address;
   chainId: ChainId;
-  marketIds: string[];
 }
 
 export async function fetchOraclesFromMorphoApi(): Promise<OracleFromApi[]> {
@@ -67,13 +64,10 @@ export async function fetchOraclesFromMorphoApi(): Promise<OracleFromApi[]> {
     const chainId = item.oracle.chain.id as ChainId;
     const key = `${chainId}-${address}`;
 
-    if (oracleMap.has(key)) {
-      oracleMap.get(key)!.marketIds.push(item.uniqueKey);
-    } else {
+    if (!oracleMap.has(key)) {
       oracleMap.set(key, {
         address,
         chainId,
-        marketIds: [item.uniqueKey],
       });
     }
   }

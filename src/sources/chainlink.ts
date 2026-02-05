@@ -1,5 +1,4 @@
-import { CHAINLINK_REGISTRY_URL } from "../config.js";
-import type { Address, ChainId, FeedInfo, FeedRegistry } from "../types.js";
+import type { Address, ChainId, FeedInfo, FeedProviderRegistry } from "../types.js";
 
 interface ChainlinkFeed {
   name: string;
@@ -14,31 +13,29 @@ interface ChainlinkFeed {
   };
 }
 
-const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
-  1: "mainnet",
-  8453: "base",
-  42161: "arbitrum",
-  137: "matic",
+const CHAINLINK_PROVIDER_URLS: Partial<Record<ChainId, string>> = {
+  1: "https://reference-data-directory.vercel.app/feeds-mainnet.json",
+  8453: "https://reference-data-directory.vercel.app/feeds-ethereum-mainnet-base-1.json",
+  137: "https://reference-data-directory.vercel.app/feeds-polygon-mainnet-katana.json",
+  42161: "https://reference-data-directory.vercel.app/feeds-ethereum-mainnet-arbitrum-1.json",
   // Unichain, Hyperliquid, Monad - no Chainlink registry yet
 };
 
-export async function fetchChainlinkFeeds(
+export async function fetchChainlinkProvider(
   chainId: ChainId
-): Promise<FeedRegistry> {
-  const networkName = NETWORK_NAMES[chainId];
-
-  if (!networkName) {
+): Promise<FeedProviderRegistry> {
+  const url = CHAINLINK_PROVIDER_URLS[chainId];
+  if (!url) {
     console.log(`[chainlink] No registry for chain ${chainId}`);
     return {
       chainId,
-      vendor: "Chainlink",
+      provider: "Chainlink",
       feeds: {},
       updatedAt: new Date().toISOString(),
     };
   }
 
-  const url = CHAINLINK_REGISTRY_URL.replace("{network}", networkName);
-  console.log(`[chainlink] Fetching feeds for ${networkName}...`);
+  console.log(`[chainlink] Fetching feeds for chain ${chainId}...`);
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -59,7 +56,7 @@ export async function fetchChainlinkFeeds(
     feeds[address] = {
       address,
       chainId,
-      vendor: "Chainlink",
+      provider: "Chainlink",
       description: feed.name || feed.path,
       pair,
       decimals: feed.decimals,
@@ -72,7 +69,7 @@ export async function fetchChainlinkFeeds(
 
   return {
     chainId,
-    vendor: "Chainlink",
+    provider: "Chainlink",
     feeds,
     updatedAt: new Date().toISOString(),
   };

@@ -70,10 +70,10 @@ export interface StandardOracleFeeds {
 }
 
 // ============================================================================
-// Feed Registry (Chainlink, Redstone, etc.)
+// Feed Provider Registry (Chainlink, Redstone, etc.)
 // ============================================================================
 
-export type FeedVendor =
+export type FeedProvider =
   | "Chainlink"
   | "Redstone"
   | "Chronicle"
@@ -87,7 +87,7 @@ export type FeedVendor =
 export interface FeedInfo {
   address: Address;
   chainId: ChainId;
-  vendor: FeedVendor;
+  provider: FeedProvider;
   description: string;
   pair: [string, string] | null;
   decimals?: number;
@@ -95,9 +95,9 @@ export interface FeedInfo {
   deviationThreshold?: number;
 }
 
-export interface FeedRegistry {
+export interface FeedProviderRegistry {
   chainId: ChainId;
-  vendor: FeedVendor;
+  provider: FeedProvider;
   feeds: Record<Address, FeedInfo>;
   updatedAt: string;
 }
@@ -111,6 +111,8 @@ export interface OracleOutput {
   chainId: ChainId;
   type: "standard" | "custom" | "unknown";
   verifiedByFactory: boolean;
+  lastUpdated: string;
+  isUpgradable: boolean;
   proxy: {
     isProxy: boolean;
     proxyType?: string;
@@ -133,7 +135,7 @@ export interface EnrichedFeed {
   chain: { id: ChainId };
   description: string;
   pair: [string, string] | [];
-  vendor: FeedVendor | null;
+  provider: FeedProvider | null;
   decimals?: number;
 }
 
@@ -158,7 +160,7 @@ export interface MetadataFile {
       upgradableCount: number;
     }
   >;
-  registrySources: {
+  providerSources: {
     chainlink: { updatedAt: string; feedCount: number };
     redstone: { updatedAt: string; feedCount: number };
   };
@@ -171,7 +173,7 @@ export interface MetadataFile {
 export interface CustomAdapterPattern {
   id: string;
   name: string;
-  vendor: FeedVendor;
+  vendor: string;
   description: string;
   knownImplementations: Partial<Record<ChainId, Address[]>>;
   functionSelectors?: string[];

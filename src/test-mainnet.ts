@@ -1,11 +1,11 @@
 import "dotenv/config";
 import { fetchOraclesForChain } from "./sources/morphoApi.js";
-import { fetchChainlinkFeeds } from "./sources/chainlink.js";
-import { fetchRedstoneFeeds } from "./sources/redstone.js";
+import { fetchChainlinkProvider } from "./sources/chainlink.js";
+import { fetchRedstoneProvider } from "./sources/redstone.js";
 import { fetchOracleFeeds } from "./sources/morphoFactory.js";
-import { isFactoryVerifiedOracle } from "./sources/factoryVerifier.js";
+import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
 import { detectProxy, detectProxyViaEtherscan } from "./analyzers/proxyDetector.js";
-import { FeedMatcher } from "./analyzers/feedMatcher.js";
+import { FeedProviderMatcher } from "./analyzers/feedProviderMatcher.js";
 import { ETHERSCAN_API_KEY, CHAIN_CONFIGS } from "./config.js";
 import type { ChainId } from "./types.js";
 
@@ -21,14 +21,14 @@ async function testMainnet() {
   console.log(`\nOracles to process: ${oracles.length}\n`);
 
   // 2. Load feed registries
-  const [chainlinkFeeds, redstoneFeeds] = await Promise.all([
-    fetchChainlinkFeeds(CHAIN_ID),
-    fetchRedstoneFeeds(CHAIN_ID),
+  const [chainlinkProvider, redstoneProvider] = await Promise.all([
+    fetchChainlinkProvider(CHAIN_ID),
+    fetchRedstoneProvider(CHAIN_ID),
   ]);
 
-  const feedMatcher = new FeedMatcher();
-  feedMatcher.addRegistry(chainlinkFeeds);
-  feedMatcher.addRegistry(redstoneFeeds);
+  const feedProviderMatcher = new FeedProviderMatcher();
+  feedProviderMatcher.addProvider(chainlinkProvider);
+  feedProviderMatcher.addProvider(redstoneProvider);
 
   // 3. Process sample oracles
   const sample = oracles.slice(0, SAMPLE_SIZE);
@@ -36,7 +36,6 @@ async function testMainnet() {
 
   for (const oracle of sample) {
     console.log(`\nOracle: ${oracle.address}`);
-    console.log(`  Markets: ${oracle.marketIds.length}`);
 
     // Check proxy via Etherscan v2 (fast, single API)
     const etherscanProxy = await detectProxyViaEtherscan(CHAIN_ID, oracle.address);
@@ -52,7 +51,8 @@ async function testMainnet() {
     }
 
     // Check factory verification
-    const isVerified = await isFactoryVerifiedOracle(CHAIN_ID, oracle.address);
+    const verifiedMap = await fetchFactoryVerifiedMap(CHAIN_ID, [oracle.address]);
+    const isVerified = verifiedMap.get(oracle.address) || false;
     console.log(`  Factory verified: ${isVerified}`);
 
     if (isVerified) {
@@ -68,8 +68,8 @@ async function testMainnet() {
           ["quoteFeedTwo", feeds.quoteFeedTwo],
         ] as const) {
           if (addr) {
-            const matched = feedMatcher.match(addr, CHAIN_ID);
-            console.log(`    ${name}: ${addr.slice(0, 10)}... -> ${matched ? `${matched.vendor}: ${matched.description}` : "unknown"}`);
+            const matched = feedProviderMatcher.match(addr, CHAIN_ID);
+            console.log(`    ${name}: ${addr.slice(0, 10)}... -> ${matched ? `${matched.provider}: ${matched.description}` : "unknown"}`);
           }
         }
       }

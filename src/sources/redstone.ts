@@ -1,5 +1,5 @@
 import { REDSTONE_REGISTRY_URL } from "../config.js";
-import type { Address, ChainId, FeedInfo, FeedRegistry } from "../types.js";
+import type { Address, ChainId, FeedInfo, FeedProviderRegistry } from "../types.js";
 
 interface RedstoneFeed {
   adapterContractAddress: string;
@@ -19,16 +19,16 @@ const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
   // Unichain, Hyperliquid, Monad - no Redstone registry yet
 };
 
-export async function fetchRedstoneFeeds(
+export async function fetchRedstoneProvider(
   chainId: ChainId
-): Promise<FeedRegistry> {
+): Promise<FeedProviderRegistry> {
   const networkName = NETWORK_NAMES[chainId];
 
   if (!networkName) {
     console.log(`[redstone] No registry for chain ${chainId}`);
     return {
       chainId,
-      vendor: "Redstone",
+      provider: "Redstone",
       feeds: {},
       updatedAt: new Date().toISOString(),
     };
@@ -45,7 +45,7 @@ export async function fetchRedstoneFeeds(
       );
       return {
         chainId,
-        vendor: "Redstone",
+        provider: "Redstone",
         feeds: {},
         updatedAt: new Date().toISOString(),
       };
@@ -64,7 +64,7 @@ export async function fetchRedstoneFeeds(
       feeds[address] = {
         address,
         chainId,
-        vendor: "Redstone",
+        provider: "Redstone",
         description: feed.name || key,
         pair,
       };
@@ -74,7 +74,7 @@ export async function fetchRedstoneFeeds(
 
     return {
       chainId,
-      vendor: "Redstone",
+      provider: "Redstone",
       feeds,
       updatedAt: new Date().toISOString(),
     };
@@ -82,7 +82,7 @@ export async function fetchRedstoneFeeds(
     console.log(`[redstone] Error fetching feeds: ${error}`);
     return {
       chainId,
-      vendor: "Redstone",
+      provider: "Redstone",
       feeds: {},
       updatedAt: new Date().toISOString(),
     };

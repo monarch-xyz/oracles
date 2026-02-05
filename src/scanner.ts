@@ -1,16 +1,16 @@
 import { ACTIVE_CHAINS, IMPL_RESCAN_INTERVAL_MS } from "./config.js";
 import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
 import { fetchOracleFeeds } from "./sources/morphoFactory.js";
-import { isFactoryVerifiedOracle } from "./sources/factoryVerifier.js";
-import { fetchChainlinkFeeds } from "./sources/chainlink.js";
-import { fetchRedstoneFeeds } from "./sources/redstone.js";
+import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
+import { fetchChainlinkProvider } from "./sources/chainlink.js";
+import { fetchRedstoneProvider } from "./sources/redstone.js";
 import {
   detectProxy,
   detectProxyViaEtherscan,
   needsImplRescan,
 } from "./analyzers/proxyDetector.js";
 import { matchCustomAdapter } from "./analyzers/customAdapters.js";
-import { FeedMatcher } from "./analyzers/feedMatcher.js";
+import { FeedProviderMatcher } from "./analyzers/feedProviderMatcher.js";
 import { loadState, saveToGist, getChainState } from "./state/store.js";
 import type {
   Address,
@@ -29,7 +29,7 @@ export async function runScanner(): Promise<void> {
   const startTime = Date.now();
 
   const state = await loadState();
-  const feedMatcher = new FeedMatcher();
+  const feedProviderMatcher = new FeedProviderMatcher();
   const outputs = new Map<ChainId, OutputFile>();
 
   // 1. Fetch all oracles from Morpho API (all chains at once)
@@ -49,32 +49,54 @@ export async function runScanner(): Promise<void> {
   for (const chainId of ACTIVE_CHAINS) {
     console.log(`\n--- Processing chain ${chainId} ---`);
 
-    const [chainlinkFeeds, redstoneFeeds] = await Promise.all([
-      fetchChainlinkFeeds(chainId),
-      fetchRedstoneFeeds(chainId),
+    const [chainlinkProvider, redstoneProvider] = await Promise.all([
+      fetchChainlinkProvider(chainId),
+      fetchRedstoneProvider(chainId),
     ]);
 
-    feedMatcher.addRegistry(chainlinkFeeds);
-    feedMatcher.addRegistry(redstoneFeeds);
+    feedProviderMatcher.addProvider(chainlinkProvider);
+    feedProviderMatcher.addProvider(redstoneProvider);
 
     const chainState = getChainState(state, chainId);
     const oracleAddresses = oraclesByChain.get(chainId) || [];
 
     console.log(`  Found ${oracleAddresses.length} oracles from Morpho API`);
 
+    const factoryCheckTargets: Address[] = [];
+    for (const oracleAddress of oracleAddresses) {
+      const existing = chainState.contracts[oracleAddress];
+      const hasStandardClassification =
+        existing?.classification?.kind === "MorphoChainlinkOracleV2";
+      const shouldCheckFactory = !(hasStandardClassification && !existing?.proxy);
+      if (shouldCheckFactory) {
+        factoryCheckTargets.push(oracleAddress);
+      }
+    }
+
+    const factoryVerifiedMap = await fetchFactoryVerifiedMap(
+      chainId,
+      factoryCheckTargets
+    );
+
     // Process each oracle
     for (const oracleAddress of oracleAddresses) {
-      await processOracle(chainId, oracleAddress, chainState, feedMatcher);
+      await processOracle(
+        chainId,
+        oracleAddress,
+        chainState,
+        feedProviderMatcher,
+        factoryVerifiedMap
+      );
     }
 
     // Rescan upgradable oracles (24h check)
     await rescanUpgradableOracles(chainId, chainState);
 
-    const output = buildOutputFile(chainId, chainState, feedMatcher);
+    const output = buildOutputFile(chainId, chainState, feedProviderMatcher);
     outputs.set(chainId, output);
   }
 
-  const metadata = buildMetadata(state, outputs, feedMatcher);
+  const metadata = buildMetadata(state, outputs, feedProviderMatcher);
   state.generatedAt = new Date().toISOString();
 
   await saveToGist(state, outputs, metadata);
@@ -87,7 +109,8 @@ async function processOracle(
   chainId: ChainId,
   oracleAddress: Address,
   chainState: ChainState,
-  feedMatcher: FeedMatcher
+  feedProviderMatcher: FeedProviderMatcher,
+  factoryVerifiedMap: Map<Address, boolean>
 ): Promise<void> {
   const now = new Date().toISOString();
 
@@ -121,16 +144,21 @@ async function processOracle(
   }
 
   // Check if factory-verified first - only fetch feeds if verified
-  const isVerified = await isFactoryVerifiedOracle(chainId, oracleAddress);
+  const hasStandardClassification =
+    contractState.classification?.kind === "MorphoChainlinkOracleV2";
+  const shouldCheckFactory = !(hasStandardClassification && !contractState.proxy);
 
-  if (isVerified) {
-    const feeds = await fetchOracleFeeds(chainId, oracleAddress);
-    if (feeds) {
-      contractState.classification = {
-        kind: "MorphoChainlinkOracleV2",
-        verifiedByFactory: true,
-        feeds,
-      };
+  if (shouldCheckFactory) {
+    const isVerified = factoryVerifiedMap.get(oracleAddress) || false;
+    if (isVerified) {
+      const feeds = await fetchOracleFeeds(chainId, oracleAddress);
+      if (feeds) {
+        contractState.classification = {
+          kind: "MorphoChainlinkOracleV2",
+          verifiedByFactory: true,
+          feeds,
+        };
+      }
     }
   }
 
@@ -205,7 +233,7 @@ async function rescanUpgradableOracles(
 function buildOutputFile(
   chainId: ChainId,
   chainState: ChainState,
-  feedMatcher: FeedMatcher
+  feedProviderMatcher: FeedProviderMatcher
 ): OutputFile {
   const oracles: OracleOutput[] = [];
 
@@ -214,7 +242,7 @@ function buildOutputFile(
       address as Address,
       chainId,
       contract,
-      feedMatcher
+      feedProviderMatcher
     );
     oracles.push(oracle);
   }
@@ -233,7 +261,7 @@ function buildOracleOutput(
   address: Address,
   chainId: ChainId,
   contract: ContractState,
-  feedMatcher: FeedMatcher
+  feedProviderMatcher: FeedProviderMatcher
 ): OracleOutput {
   const classification = contract.classification;
   let type: "standard" | "custom" | "unknown" = "unknown";
@@ -250,10 +278,10 @@ function buildOracleOutput(
     verifiedByFactory = classification.verifiedByFactory;
     const feeds = classification.feeds;
     data = {
-      baseFeedOne: feedMatcher.enrichFeed(feeds.baseFeedOne, chainId),
-      baseFeedTwo: feedMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
-      quoteFeedOne: feedMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
-      quoteFeedTwo: feedMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
+      baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
+      baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
+      quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
+      quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
     };
   } else if (classification?.kind === "CustomAdapter") {
     type = "custom";
@@ -264,6 +292,8 @@ function buildOracleOutput(
     chainId,
     type,
     verifiedByFactory,
+    lastUpdated: contract.lastSeenAt,
+    isUpgradable: !!contract.proxy,
     proxy: {
       isProxy: !!contract.proxy,
       proxyType: contract.proxy?.proxyType,
@@ -278,10 +308,10 @@ function buildOracleOutput(
 function buildMetadata(
   state: ScannerState,
   outputs: Map<ChainId, OutputFile>,
-  feedMatcher: FeedMatcher
+  feedProviderMatcher: FeedProviderMatcher
 ): MetadataFile {
   const chains: MetadataFile["chains"] = {} as MetadataFile["chains"];
-  const stats = feedMatcher.getStats();
+  const stats = feedProviderMatcher.getStats();
 
   for (const [chainId, output] of outputs) {
     const oracles = output.oracles;
@@ -298,7 +328,7 @@ function buildMetadata(
     version: "1.0.0",
     generatedAt: new Date().toISOString(),
     chains,
-    registrySources: {
+    providerSources: {
       chainlink: {
         updatedAt: new Date().toISOString(),
         feedCount: Object.values(stats).reduce(

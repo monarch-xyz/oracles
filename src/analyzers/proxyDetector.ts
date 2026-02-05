@@ -1,5 +1,5 @@
 import { getClient } from "../sources/morphoFactory.js";
-import { CHAIN_CONFIGS, ETHERSCAN_API_KEY } from "../config.js";
+import { ETHERSCAN_API_KEY, ETHERSCAN_V2_API_URL } from "../config.js";
 import type { Address, ChainId, ProxyInfo } from "../types.js";
 
 const EIP1967_IMPL_SLOT =
@@ -48,13 +48,12 @@ export async function detectProxyViaEtherscan(
   chainId: ChainId,
   address: Address
 ): Promise<{ implementation: Address | null; isProxy: boolean } | null> {
-  const config = CHAIN_CONFIGS[chainId];
-  if (!config.explorerApiUrl || !ETHERSCAN_API_KEY) {
+  if (!ETHERSCAN_API_KEY) {
     return null;
   }
 
   try {
-    const url = `${config.explorerApiUrl}?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`;
+    const url = `${ETHERSCAN_V2_API_URL}?chainid=${chainId}&module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`;
     const response = await fetch(url);
     const data = (await response.json()) as {
       status: string;

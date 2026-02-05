@@ -62,6 +62,57 @@ export async function fetchOracleFeeds(
   const client = getClient(chainId);
 
   try {
+    const results = await client.multicall({
+      contracts: [
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "BASE_FEED_1",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "BASE_FEED_2",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "QUOTE_FEED_1",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "QUOTE_FEED_2",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "BASE_VAULT",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "QUOTE_VAULT",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "BASE_VAULT_CONVERSION_SAMPLE",
+        },
+        {
+          address: oracleAddress,
+          abi: MORPHO_CHAINLINK_V2_ABI,
+          functionName: "QUOTE_VAULT_CONVERSION_SAMPLE",
+        },
+      ],
+      allowFailure: true,
+    });
+
+    if (results.some((result) => result.status !== "success")) {
+      console.log(`[fetchOracleFeeds] Multicall incomplete for ${oracleAddress}`);
+      return null;
+    }
+
     const [
       baseFeedOne,
       baseFeedTwo,
@@ -71,48 +122,16 @@ export async function fetchOracleFeeds(
       quoteVault,
       baseVaultConversionSample,
       quoteVaultConversionSample,
-    ] = await Promise.all([
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "BASE_FEED_1",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "BASE_FEED_2",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "QUOTE_FEED_1",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "QUOTE_FEED_2",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "BASE_VAULT",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "QUOTE_VAULT",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "BASE_VAULT_CONVERSION_SAMPLE",
-      }),
-      client.readContract({
-        address: oracleAddress,
-        abi: MORPHO_CHAINLINK_V2_ABI,
-        functionName: "QUOTE_VAULT_CONVERSION_SAMPLE",
-      }),
-    ]);
+    ] = results.map((result) => result.result) as [
+      Address,
+      Address,
+      Address,
+      Address,
+      Address,
+      Address,
+      bigint,
+      bigint,
+    ];
 
     return {
       baseFeedOne: toNullableAddress(baseFeedOne.toLowerCase() as Address),

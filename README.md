@@ -20,9 +20,8 @@ Standalone service that aggregates and publishes Morpho oracle data to GitHub Gi
 GIST_ID=your_gist_id
 GITHUB_TOKEN=ghp_your_token
 
-# Optional but recommended for proxy detection
+# Optional but recommended for proxy detection (Etherscan V2 single key)
 ETHERSCAN_API_KEY=your_key
-BASESCAN_API_KEY=your_key
 
 # Optional: better RPC endpoints
 RPC_MAINNET=https://eth-mainnet.g.alchemy.com/v2/your-key
@@ -51,6 +50,8 @@ pnpm run scan
       "chainId": 1,
       "type": "standard" | "custom" | "unknown",
       "verifiedByFactory": true,
+      "lastUpdated": "2024-01-15T12:00:00Z",
+      "isUpgradable": false,
       "proxy": {
         "isProxy": false,
         "proxyType": "EIP1967",
@@ -63,7 +64,7 @@ pnpm run scan
           "chain": { "id": 1 },
           "description": "ETH / USD",
           "pair": ["ETH", "USD"],
-          "vendor": "Chainlink",
+          "provider": "Chainlink",
           "decimals": 8
         },
         // baseFeedTwo, quoteFeedOne, quoteFeedTwo...
@@ -81,7 +82,6 @@ Runs every 6 hours automatically. Configure secrets in repo settings:
 - `GIST_ID`
 - `GIST_TOKEN` (PAT with gist scope)
 - `ETHERSCAN_API_KEY`
-- `BASESCAN_API_KEY`
 - `RPC_MAINNET` (optional)
 - `RPC_BASE` (optional)
 
@@ -112,12 +112,12 @@ src/
 ├── types.ts              # TypeScript types
 ├── sources/
 │   ├── morphoFactory.ts  # Factory event discovery + feed fetching
-│   ├── chainlink.ts      # Chainlink registry
-│   └── redstone.ts       # Redstone registry
+│   ├── chainlink.ts      # Chainlink feed provider registry
+│   └── redstone.ts       # Redstone feed provider registry
 ├── analyzers/
 │   ├── proxyDetector.ts  # EIP-1967 proxy detection
 │   ├── customAdapters.ts # Known custom oracle patterns
-│   └── feedMatcher.ts    # Match feeds to registries
+│   └── feedProviderMatcher.ts # Match feeds to providers
 └── state/
     └── store.ts          # Gist read/write
 ```

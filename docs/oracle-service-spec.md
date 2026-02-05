@@ -3,10 +3,11 @@
 ## TL;DR
 
 Build an automated worker service that:
-1. **Aggregates oracle data** from Chainlink, Redstone, Morpho API, and custom implementations
-2. **Detects custom oracles** by analyzing proxy contracts and matching known patterns
-3. **Publishes to GitHub** as JSON files (feeds + oracles) that Monarch frontend consumes
-4. **Runs on a schedule** (cron) to keep data fresh without manual script runs
+1. **Fetches oracle addresses** from Morpho API (addresses only)
+2. **Enriches standard oracles** using Chainlink/Redstone feed provider registries
+3. **Detects proxies & custom adapters** via onchain + Etherscan V2
+4. **Publishes to GitHub Gist** as JSON files (`oracles.{chainId}.json`, `meta.json`, `_state.json`)
+5. **Runs on a schedule** (cron) to keep data fresh without manual script runs
 
 ---
 
@@ -14,10 +15,10 @@ Build an automated worker service that:
 
 | Goal | Current State | Target State |
 |------|---------------|--------------|
-| Standard oracle feeds | ✅ Manual scripts, static JSON | 🎯 Auto-updated via worker |
+| Standard oracle enrichment | ✅ Enriched via provider registries | 🎯 Auto-updated via worker |
 | Custom oracle detection | ❌ Hidden from users | 🎯 Detected & displayed with metadata |
 | Data freshness | ⚠️ Stale until scripts run | 🎯 Updated every 6-12 hours automatically |
-| Feed enrichment | ⚠️ Partial (missing some vendors) | 🎯 Complete enrichment from all sources |
+| Feed enrichment | ⚠️ Partial (missing some providers) | 🎯 Complete enrichment from all sources |
 | Deployment friction | ⚠️ Must redeploy frontend | 🎯 Just fetch new JSON from GitHub |
 
 ---
@@ -38,7 +39,7 @@ Build an automated worker service that:
 │         ▼                ▼                ▼                ▼           │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │                      DATA AGGREGATOR                            │   │
-│  │  - Fetch all feed registries                                    │   │
+│  │  - Fetch all feed provider registries                           │   │
 │  │  - Fetch all market oracle addresses                            │   │
 │  │  - Detect proxies & implementations                             │   │
 │  └────────────────────────────┬────────────────────────────────────┘   │
@@ -46,7 +47,7 @@ Build an automated worker service that:
 │                               ▼                                        │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │                    ORACLE ANALYZER                              │   │
-│  │  - Match feeds to known vendors                                 │   │
+│  │  - Match feeds to known providers                               │   │
 │  │  - Detect custom oracle implementations                         │   │
 │  │  - Extract oracle metadata (assets, decimals, etc.)             │   │
 │  └────────────────────────────┬────────────────────────────────────┘   │
@@ -54,33 +55,20 @@ Build an automated worker service that:
 │                               ▼                                        │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │                     OUTPUT GENERATOR                            │   │
-│  │  - Generate feeds.json (all price feeds by chain)               │   │
-│  │  - Generate oracles.json (market oracles with enrichment)       │   │
-│  │  - Generate custom-impls.json (known custom implementations)    │   │
+│  │  - Generate oracles.{chainId}.json                              │   │
+│  │  - Generate meta.json (stats)                                   │   │
+│  │  - Generate _state.json (internal state)                        │   │
 │  └────────────────────────────┬────────────────────────────────────┘   │
 │                               │                                        │
 └───────────────────────────────┼────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    GITHUB REPOSITORY / GIST                            │
+│                         GITHUB GIST OUTPUT                             │
 │                                                                         │
-│  monarch-oracle-data/                                                   │
-│  ├── feeds/                                                             │
-│  │   ├── chainlink/                                                     │
-│  │   │   ├── mainnet.json                                               │
-│  │   │   ├── base.json                                                  │
-│  │   │   └── ...                                                        │
-│  │   ├── redstone/                                                      │
-│  │   │   └── ...                                                        │
-│  │   └── all-feeds.json         # Merged feed registry                  │
-│  ├── oracles/                                                           │
-│  │   ├── mainnet.json           # Oracle -> feeds mapping               │
-│  │   ├── base.json                                                      │
-│  │   └── ...                                                            │
-│  ├── custom-implementations/                                            │
-│  │   └── registry.json          # Known custom oracle patterns          │
-│  └── metadata.json              # Last update timestamp, stats          │
+│  - oracles.{chainId}.json     # Enriched oracle list per chain          │
+│  - meta.json                  # Stats + provider counts                │
+│  - _state.json                # Internal scanner state                 │
 └─────────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -99,7 +87,11 @@ Build an automated worker service that:
 ## External Services Required
 
 ### 1. Chainlink Reference Data Directory
-- **URL**: `https://reference-data-directory.vercel.app/feeds-{network}.json`
+- **URLs**:
+  - Mainnet: `https://reference-data-directory.vercel.app/feeds-mainnet.json`
+  - Base: `https://reference-data-directory.vercel.app/feeds-ethereum-mainnet-base-1.json`
+  - Polygon: `https://reference-data-directory.vercel.app/feeds-polygon-mainnet-katana.json`
+  - Arbitrum: `https://reference-data-directory.vercel.app/feeds-ethereum-mainnet-arbitrum-1.json`
 - **Purpose**: Get all Chainlink price feeds with metadata
 - **Rate Limit**: None (public CDN)
 - **Auth**: None required
@@ -112,40 +104,39 @@ Build an automated worker service that:
 
 ### 3. Morpho Blue API
 - **URL**: `https://blue-api.morpho.org/graphql`
-- **Purpose**: Get all oracles used by Morpho markets + feed decomposition for standard oracles
+- **Purpose**: Get all oracle addresses used by Morpho markets (addresses only)
 - **Rate Limit**: Should check, likely reasonable
 - **Auth**: None required
 
-### 4. Etherscan APIs (Multi-chain)
-- **URLs**:
-  - Mainnet: `https://api.etherscan.io/api`
-  - Base: `https://api.basescan.org/api`
-  - Polygon: `https://api.polygonscan.com/api`
-  - Arbitrum: `https://api.arbiscan.io/api`
-- **Purpose**: 
+### 4. Etherscan API V2 (Multichain)
+- **Base URL**: `https://api.etherscan.io/v2/api`
+- **Usage**: pass `chainid` for the target network (e.g., `chainid=1` for mainnet)
+- **Purpose**:
   - Detect proxy contracts → get implementation address
   - Fetch contract ABI for pattern matching
   - Get contract source code (optional, for deeper analysis)
-- **Rate Limit**: 5 calls/sec (free), 10 calls/sec (paid)
-- **Auth**: API key required (free tier available)
+- **Auth**: one Etherscan API key works across all supported chains (V2 unified API)
+- **Note**: Etherscan API V1 endpoints were deprecated on **August 15, 2025**; use V2 format with `chainid`
 
 ### 5. GitHub API
 - **URL**: `https://api.github.com`
-- **Purpose**: Commit updated JSON files to data repository
+- **Purpose**: Update Gist files with latest outputs
 - **Rate Limit**: 5000 requests/hour with token
-- **Auth**: GitHub PAT with repo write access
+- **Auth**: GitHub PAT with `gist` scope
 
 ---
 
 ## Data Schemas
 
-### 1. Unified Feed Schema (`feeds/all-feeds.json`)
+### 1. Feed Provider Schema (internal, not published)
+
+Provider data comes only from provider APIs (Chainlink/Redstone). We do not emit a separate feeds file yet.
 
 ```typescript
 type UnifiedFeed = {
   address: string;                    // Feed contract address (lowercase)
   chainId: number;
-  vendor: string;                     // "Chainlink" | "Redstone" | "Pyth" | "Oval" | "Lido" | "Pendle" | "Spectra" | ...
+  provider: string;                   // "Chainlink" | "Redstone" | "Pyth" | "Oval" | "Lido" | "Pendle" | "Spectra" | ...
   
   // Asset pair
   baseAsset: string;                  // e.g., "ETH"
@@ -155,21 +146,15 @@ type UnifiedFeed = {
   description?: string;               // Human-readable description
   decimals?: number;                  // Price decimals
   
-  // Reliability metrics (vendor-specific)
+  // Reliability metrics (provider-specific)
   heartbeat?: number;                 // Seconds between updates
   deviationThreshold?: number;        // % deviation trigger
   
   // Source tracking
-  source: "chainlink" | "redstone" | "morpho-api" | "manual";
-  lastUpdated: string;                // ISO timestamp
+  lastUpdated: string;                // ISO timestamp (provider API fetch time)
 };
 
-type FeedsFile = {
-  version: string;
-  generatedAt: string;
-  chainId: number;
-  feeds: UnifiedFeed[];
-};
+// (No feeds file is published in the current implementation.)
 ```
 
 ### 2. Oracle Schema (`oracles/{chainId}.json`)
@@ -184,6 +169,9 @@ type StandardOracleData = {
   quoteFeedOne: string | null;
   quoteFeedTwo: string | null;
 };
+
+// Standard oracles require feed providers (Chainlink/Redstone/etc.).
+// Custom oracles may not have provider-backed feeds.
 
 type CustomOracleData = {
   type: "custom";
@@ -204,12 +192,10 @@ type EnrichedOracle = {
   data: StandardOracleData | CustomOracleData;
   
   // Metadata
+  lastUpdated: string;                 // ISO timestamp
+  isUpgradable: boolean;
   isProxy: boolean;
   proxyType?: "EIP1967" | "Transparent" | "UUPS" | "Custom" | null;
-  
-  // Source tracking
-  source: "morpho-api" | "etherscan-analysis";
-  lastUpdated: string;
 };
 
 type OraclesFile = {
@@ -220,7 +206,44 @@ type OraclesFile = {
 };
 ```
 
-### 3. Custom Implementation Registry (`custom-implementations/registry.json`)
+### 3. Metadata Schema (`meta.json`)
+
+```typescript
+type MetadataFile = {
+  version: string;
+  generatedAt: string;
+  chains: {
+    [chainId: number]: {
+      oracleCount: number;
+      standardCount: number;
+      customCount: number;
+      unknownCount: number;
+      upgradableCount: number;
+    };
+  };
+  providerSources: {
+    chainlink: { updatedAt: string; feedCount: number };
+    redstone: { updatedAt: string; feedCount: number };
+  };
+};
+```
+
+### 4. State Schema (`_state.json`) (internal)
+
+```typescript
+type ScannerState = {
+  version: number;
+  generatedAt: string;
+  chains: {
+    [chainId: number]: {
+      cursor: { lastProcessedBlock: number };
+      contracts: Record<string, unknown>;
+    };
+  };
+};
+```
+
+### 5. Custom Implementation Registry (`custom-implementations/registry.json`) (planned)
 
 ```typescript
 type CustomOraclePattern = {
@@ -281,20 +304,13 @@ jobs:
           cache: 'pnpm'
       
       - run: pnpm install
-      - run: pnpm run oracle:sync
+      - run: pnpm run scan
         env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.GIST_TOKEN }}
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-          BASESCAN_API_KEY: ${{ secrets.BASESCAN_API_KEY }}
-          ARBISCAN_API_KEY: ${{ secrets.ARBISCAN_API_KEY }}
-          POLYGONSCAN_API_KEY: ${{ secrets.POLYGONSCAN_API_KEY }}
-      
-      - name: Commit and push
-        run: |
-          git config user.name "Oracle Bot"
-          git config user.email "bot@monarch.xyz"
-          git add data/
-          git diff --staged --quiet || git commit -m "chore: update oracle data $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push
+          RPC_MAINNET: ${{ secrets.RPC_MAINNET }}
+          RPC_BASE: ${{ secrets.RPC_BASE }}
 ```
 
 ### Option B: Cloudflare Worker (For Real-time)
@@ -304,90 +320,28 @@ jobs:
 
 ---
 
-## Migration Plan: Existing Scripts → Worker
+## Current Implementation
 
-### Current Scripts to Migrate
-
-| Script | Data Source | Output | Migration Status |
-|--------|-------------|--------|------------------|
-| `generate-chainlink-data.ts` | Chainlink Reference Dir | `chainlink-data/*.json` | 🔄 Migrate |
-| `generate-redstone-data.ts` | Redstone GitHub | `redstone-data/*.json` | 🔄 Migrate |
-| `generate-oracle-cache.ts` | Morpho API | `oracle-cache.json` | 🔄 Migrate + Enhance |
-
-### Migration Steps
-
-#### Phase 1: Consolidate Scripts (Week 1)
-
-1. Create new unified worker script: `scripts/oracle-worker/index.ts`
-2. Import logic from existing scripts
-3. Add Etherscan integration for proxy detection
-4. Output to new unified schema
-5. Test locally with all data sources
-
-#### Phase 2: Add Custom Oracle Detection (Week 2)
-
-1. Create `custom-implementations/registry.json` with known patterns:
-   - Pendle PT Oracle adapters
-   - Spectra Linear Discount oracles
-   - Chronicle oracles
-   - Any other known custom implementations
-   
-2. Implement detection logic:
-   ```typescript
-   async function detectCustomOracle(address: string, chainId: number) {
-     // 1. Check if it's a proxy
-     const implAddress = await getImplementation(address, chainId);
-     
-     // 2. Match against known patterns
-     const pattern = await matchKnownPattern(implAddress || address, chainId);
-     
-     // 3. Return enriched data
-     return pattern ? {
-       type: 'custom',
-       implementation: implAddress,
-       implName: pattern.name,
-       implVendor: pattern.vendor,
-       ...
-     } : null;
-   }
-   ```
-
-#### Phase 3: GitHub Actions Setup (Week 2)
-
-1. Create data repository or use existing (as a separate branch or folder)
-2. Set up GitHub Actions workflow
-3. Add required secrets (API keys)
-4. Test scheduled runs
-
-#### Phase 4: Frontend Integration (Week 3)
-
-1. Update `useOracleDataQuery` to fetch from GitHub raw URLs
-2. Add fallback to bundled data
-3. Update `detectFeedVendor` to use new unified feed format
-4. Add UI for custom oracles in `OracleTypeInfo`
-
----
-
-## File Structure for Worker
+The current implementation is in `src/` and publishes outputs to a GitHub Gist. It does **not** emit separate `feeds/*.json` or custom implementation registry files yet.
 
 ```
-scripts/oracle-worker/
-├── index.ts                    # Main entry point
+src/
+├── index.ts              # Entry point
+├── scanner.ts            # Main orchestration
+├── config.ts             # Chain configs, API URLs
+├── types.ts              # TypeScript types
 ├── sources/
-│   ├── chainlink.ts            # Fetch Chainlink feeds
-│   ├── redstone.ts             # Fetch Redstone feeds  
-│   ├── morpho.ts               # Fetch from Morpho API
-│   └── etherscan.ts            # Proxy detection & ABI fetching
+│   ├── morphoApi.ts      # Oracle address discovery (Morpho API)
+│   ├── morphoFactory.ts  # Onchain feed reads for standard oracles
+│   ├── factoryVerifier.ts# Factory verification (onchain)
+│   ├── chainlink.ts      # Chainlink feed provider registry
+│   └── redstone.ts       # Redstone feed provider registry
 ├── analyzers/
-│   ├── proxy-detector.ts       # Detect proxy type & implementation
-│   ├── pattern-matcher.ts      # Match against known custom patterns
-│   └── feed-enricher.ts        # Combine data from all sources
-├── output/
-│   ├── feeds-generator.ts      # Generate feeds/*.json
-│   ├── oracles-generator.ts    # Generate oracles/*.json
-│   └── github-publisher.ts     # Commit to GitHub (if needed)
-├── types.ts                    # Shared types
-└── config.ts                   # API endpoints, chain configs
+│   ├── proxyDetector.ts  # EIP-1967 proxy detection
+│   ├── customAdapters.ts # Known custom oracle patterns
+│   └── feedProviderMatcher.ts # Match feeds to providers
+└── state/
+    └── store.ts          # Gist read/write
 ```
 
 ---
@@ -395,25 +349,21 @@ scripts/oracle-worker/
 ## Requirements Checklist
 
 ### Infrastructure
-- [ ] GitHub repository for oracle data (or use existing monarch repo with `/data` folder)
+- [ ] GitHub Gist for oracle outputs
 - [ ] GitHub Actions workflow file
-- [ ] GitHub PAT with repo write access (if separate repo)
+- [ ] GitHub PAT with `gist` scope
 
 ### API Keys (Secrets)
-- [ ] `ETHERSCAN_API_KEY` - Ethereum mainnet
-- [ ] `BASESCAN_API_KEY` - Base
-- [ ] `ARBISCAN_API_KEY` - Arbitrum
-- [ ] `POLYGONSCAN_API_KEY` - Polygon
-- [ ] (Optional) Additional chain explorers as needed
+- [ ] `ETHERSCAN_API_KEY` - Etherscan API V2 (single key for all chains)
 
 ### Development
-- [ ] New script files under `scripts/oracle-worker/`
 - [ ] Custom implementation registry with initial patterns
+- [ ] Skip re-fetching feeds for non-upgradable standard oracles; only re-validate feed provider support
 - [ ] Test suite for pattern matching
 - [ ] Local testing with mock data
 
 ### Frontend Changes
-- [ ] Update `useOracleDataQuery` hook
+- [ ] Update `useOracleDataQuery` hook to read from Gist outputs
 - [ ] Add custom oracle display components
 - [ ] Remove warning for known custom oracles
 - [ ] Add vendor icons for new vendors (Pendle, Spectra, etc.)
@@ -442,10 +392,7 @@ scripts/oracle-worker/
 
 ## Next Steps
 
-1. **Create the oracle-worker script structure** - consolidate existing scripts
-2. **Register Etherscan API keys** - free tier for all chains
-3. **Build custom implementation registry** - start with Pendle, Spectra
-4. **Test proxy detection** - verify Etherscan API works for your use cases
-5. **Set up GitHub Actions** - schedule and test
-6. **Update frontend hooks** - consume new data format
-
+1. **Validate Gist publishing** with a local run and scheduled GitHub Actions
+2. **Decide storage target** (Gist vs repo for discoverability)
+3. **Expand custom adapter registry** and output richer custom metadata
+4. **Optionally publish provider feeds** as separate JSON files
