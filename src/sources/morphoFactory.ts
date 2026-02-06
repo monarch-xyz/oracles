@@ -12,6 +12,11 @@ const unichain = defineChain({
   name: "Unichain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: ["https://mainnet.unichain.org"] } },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+    },
+  },
 });
 
 const hyperliquid = defineChain({
@@ -19,6 +24,11 @@ const hyperliquid = defineChain({
   name: "Hyperliquid EVM",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: ["https://rpc.hyperliquid.xyz/evm"] } },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+    },
+  },
 });
 
 const monad = defineChain({
@@ -26,6 +36,11 @@ const monad = defineChain({
   name: "Monad Testnet",
   nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
   rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+    },
+  },
 });
 
 const CHAINS = {
