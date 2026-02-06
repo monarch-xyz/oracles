@@ -1,127 +1,116 @@
 # Morpho Oracle Scanner
 
-Standalone service that aggregates and publishes Morpho oracle data to GitHub Gist.
+Scans Morpho market oracles across supported chains, classifies each oracle from first principles (factory verification + bytecode checks), enriches feeds with provider metadata, and publishes JSON outputs to a GitHub Gist.
 
-## Documentation
+## What It Does
 
-- **[Type System](docs/TYPES.md)** - Type definitions and data flow between oracles scanner and monarch frontend
-
-## Features
-
-- **Factory verification**: Only trusts oracles created via `MorphoChainlinkOracleV2Factory`
-- **Feed matching**: Enriches feeds with Chainlink/Redstone registry metadata
-- **Proxy detection**: Tracks upgradable oracles (EIP-1967) and rescans implementations every 24h
-- **Custom adapters**: Pattern matching for Pendle, Spectra, Lido, Chronicle, Oval
-- **Gist publishing**: Outputs JSON files consumable by frontend
+- Fetches oracle addresses from Morpho API
+- Classifies standard Morpho Chainlink oracles with a staged flow:
+  1. Validate V2 by factory (batch)
+  2. Fetch V2 feeds for factory-verified addresses (multicall)
+  3. Validate non-factory addresses by bytecode one-by-one (V1/V2)
+  4. Fetch feeds in batch by resolved oracle type (V1 batch + V2 batch)
+- Detects and tracks proxy implementations for non-standard contracts
+- Matches feed addresses to provider registries (Chainlink, Redstone, hardcoded providers)
+- Writes `oracles.{chainId}.json`, `meta.json`, and `_state.json` to a Gist
 
 ## Setup
 
-1. Create a GitHub Gist (can be private or public)
-2. Generate a GitHub PAT with `gist` scope
-3. Copy `.env.example` to `.env` and fill in:
+1. Copy `.env.example` to `.env` and configure:
 
 ```bash
 GIST_ID=your_gist_id
 GITHUB_TOKEN=ghp_your_token
+ETHERSCAN_API_KEY=your_etherscan_v2_key
 
-# Optional but recommended for proxy detection (Etherscan V2 single key)
-ETHERSCAN_API_KEY=your_key
-
-# Optional: better RPC endpoints
+# Optional RPC overrides
 RPC_MAINNET=https://eth-mainnet.g.alchemy.com/v2/your-key
 RPC_BASE=https://base-mainnet.g.alchemy.com/v2/your-key
+RPC_ARBITRUM=https://arb-mainnet.g.alchemy.com/v2/your-key
+RPC_POLYGON=https://polygon-mainnet.g.alchemy.com/v2/your-key
+RPC_UNICHAIN=https://mainnet.unichain.org
+RPC_HYPEREVM=https://rpc.hyperliquid.xyz/evm
+RPC_MONAD=https://testnet-rpc.monad.xyz
 ```
 
-4. Run locally:
+2. Install and run:
 
 ```bash
 pnpm install
 pnpm run scan
 ```
 
-## Output Schema
+## Commands
 
-### `oracles.{chainId}.json`
+- `pnpm run scan`: run scanner
+- `pnpm run build`: compile TypeScript
+- `pnpm run typecheck`: TypeScript no-emit check
+- `pnpm run lint`: biome checks
+- `pnpm run test`: run tests
+- `pnpm run bytecode:mask:v2`: generate pasteable V2 mask constants from real test inputs
+- `pnpm run bytecode:mask:v2:write`: same as above, but writes directly to `src/bytecodes/morpho-chainlink-oracle-v2-mask.ts`
 
-```typescript
-{
-  "version": "1.0.0",
-  "generatedAt": "2024-01-15T12:00:00Z",
-  "chainId": 1,
-  "oracles": [
-    {
-      "address": "0x...",
-      "chainId": 1,
-      "type": "standard" | "custom" | "unknown",
-      "verifiedByFactory": true,
-      "lastUpdated": "2024-01-15T12:00:00Z",
-      "isUpgradable": false,
-      "proxy": {
-        "isProxy": false,
-        "proxyType": "EIP1967",
-        "implementation": "0x...",
-        "lastImplChangeAt": "2024-01-10T..."
-      },
-      "data": {
-        "baseFeedOne": {
-          "address": "0x...",
-          "chain": { "id": 1 },
-          "description": "ETH / USD",
-          "pair": ["ETH", "USD"],
-          "provider": "Chainlink",
-          "decimals": 8
-        },
-        // baseFeedTwo, quoteFeedOne, quoteFeedTwo...
-      },
-      "lastScannedAt": "2024-01-15T12:00:00Z"
-    }
-  ]
-}
+## Real Bytecode Validation Workflow
+
+This is the place to validate against real deployed bytecode, not only reference constants.
+
+1. Open `tests/bytecode-real-input.test.ts`.
+2. Paste real bytecode hex values into:
+- `REAL_V1_BYTECODE`
+- `REAL_V2_BYTECODE`
+- `REAL_V2_BYTECODE_2`
+3. Run:
+
+```bash
+pnpm test tests/bytecode-real-input.test.ts
 ```
 
-## GitHub Actions
+4. If two valid V2 bytecodes differ because of runtime immutables, regenerate the mask:
 
-Runs every 6 hours automatically. Configure secrets in repo settings:
-
-- `GIST_ID`
-- `GIST_TOKEN` (PAT with gist scope)
-- `ETHERSCAN_API_KEY`
-- `RPC_MAINNET` (optional)
-- `RPC_BASE` (optional)
-
-## Adding Custom Adapters
-
-Edit `src/analyzers/customAdapters.ts`:
-
-```typescript
-{
-  id: "your-adapter-id",
-  name: "Your Adapter Name",
-  vendor: "VendorName",
-  description: "Description",
-  knownImplementations: {
-    1: ["0x...implementation-address"],
-  },
-  priceMethod: "latestAnswer()",
-}
+```bash
+pnpm run bytecode:mask:v2
 ```
 
-## Architecture
+5. Paste the printed output into `src/bytecodes/morpho-chainlink-oracle-v2-mask.ts`.
+   Alternatively:
 
+```bash
+pnpm run bytecode:mask:v2:write
 ```
+
+6. Re-run tests:
+
+```bash
+pnpm test
+pnpm run lint
+```
+
+## Outputs
+
+- `oracles.{chainId}.json`: classified and enriched oracle list per chain
+- `meta.json`: summary counts and provider stats
+- `_state.json`: scanner state used for incremental context and proxy tracking
+
+## Current Source Layout
+
+```text
 src/
-├── index.ts              # Entry point
-├── scanner.ts            # Main orchestration
-├── config.ts             # Chain configs, API URLs
-├── types.ts              # TypeScript types
-├── sources/
-│   ├── morphoFactory.ts  # Factory event discovery + feed fetching
-│   ├── chainlink.ts      # Chainlink feed provider registry
-│   └── redstone.ts       # Redstone feed provider registry
-├── analyzers/
-│   ├── proxyDetector.ts  # EIP-1967 proxy detection
-│   ├── customAdapters.ts # Known custom oracle patterns
-│   └── feedProviderMatcher.ts # Match feeds to providers
-└── state/
-    └── store.ts          # Gist read/write
+  scanner.ts                         # Main orchestration
+  types.ts                           # Shared types and output schemas
+  sources/
+    morphoApi.ts                     # Oracle address source
+    factoryVerifier.ts               # V2 factory verification (batch)
+    oracleBytecodeValidation.ts      # Bytecode validation stage (1-by-1)
+    oracleFeedFetcher.ts             # V1/V2 feed multicalls (batch)
+    oracleV1Detector.ts              # V1 bytecode check
+    oracleV2BytecodeDetector.ts      # V2 masked bytecode check
+  bytecodes/
+    normalize.ts                     # PUSH32 immutable normalization
+    mask.ts                          # Byte-index mask helper
+    morpho-chainlink-oracle-v1.ts    # V1 normalized target
+    morpho-chainlink-oracle-v2-mask.ts # V2 masked target + ignored byte indices
 ```
+
+## CI
+
+GitHub Action `.github/workflows/oracle-sync.yml` runs every 6 hours and on manual trigger.
