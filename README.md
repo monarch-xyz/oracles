@@ -2,6 +2,10 @@
 
 Standalone service that aggregates and publishes Morpho oracle data to GitHub Gist.
 
+## Documentation
+
+- **[Type System](docs/TYPES.md)** - Type definitions and data flow between oracles scanner and monarch frontend
+
 ## Features
 
 - **Factory verification**: Only trusts oracles created via `MorphoChainlinkOracleV2Factory`
