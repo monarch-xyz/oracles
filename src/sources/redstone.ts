@@ -124,6 +124,47 @@ export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProvi
   }
 }
 
+/**
+ * Infer the underlying asset from a wrapped/staked token symbol.
+ * e.g. kHYPE → HYPE, wstETH → ETH, weETH → ETH, sUSDe → USDe
+ */
+function inferUnderlying(symbol: string): string | null {
+  // Known specific mappings for edge cases
+  const knownMappings: Record<string, string> = {
+    LBTC: "BTC", // Lombard BTC
+    eBTC: "BTC", // ether.fi BTC
+    cbBTC: "BTC", // Coinbase BTC
+    UBTC: "BTC", // Usual BTC
+    SolvBTC: "BTC",
+    pumpBTC: "BTC",
+  };
+
+  if (knownMappings[symbol]) {
+    return knownMappings[symbol];
+  }
+
+  // Known prefix patterns for wrapped/staked/liquid tokens
+  const prefixPatterns: Array<{ pattern: RegExp; extract: (m: RegExpMatchArray) => string }> = [
+    // Single letter prefixes: k, m, w, s (but not for simple symbols)
+    { pattern: /^([kmsw])([A-Z]{3,})$/i, extract: (m) => m[2] },
+    // Two letter prefixes: st, ez, rs, hb, be, cm
+    { pattern: /^(st|ez|rs|hb|be|cm|hw)([A-Z]{2,})$/i, extract: (m) => m[2] },
+    // Three letter prefixes: wst, lst, puf, rsw
+    { pattern: /^(wst|lst|puf|rsw|rsr)([A-Z]{2,})$/i, extract: (m) => m[2] },
+    // Four+ letter prefixes: weETH → ETH (we prefix)
+    { pattern: /^we([A-Z]{2,})$/i, extract: (m) => m[1] },
+  ];
+
+  for (const { pattern, extract } of prefixPatterns) {
+    const match = symbol.match(pattern);
+    if (match) {
+      return extract(match);
+    }
+  }
+
+  return null;
+}
+
 function parsePair(key: string): [string, string] | null {
   // Try standard format: "ETH / USD"
   const slashMatch = key.match(/^(.+)\s*\/\s*(.+)$/);
@@ -131,16 +172,26 @@ function parsePair(key: string): [string, string] | null {
     return [slashMatch[1].trim(), slashMatch[2].trim()];
   }
 
-  // Try Redstone FUNDAMENTAL format: "sYUSD_FUNDAMENTAL" → [sYUSD, USD]
+  // Try Redstone FUNDAMENTAL format: "kHYPE_FUNDAMENTAL" → [kHYPE, HYPE]
+  // FUNDAMENTAL means the asset vs its underlying, not vs USD
   const fundamentalMatch = key.match(/^(.+?)_FUNDAMENTAL$/i);
   if (fundamentalMatch) {
-    return [fundamentalMatch[1], "USD"];
+    const symbol = fundamentalMatch[1];
+    const underlying = inferUnderlying(symbol);
+    // If we can infer the underlying, use it; otherwise default to USD
+    return [symbol, underlying ?? "USD"];
   }
 
   // Try underscore format: "WETH_ETH" → [WETH, ETH]
   const underscoreMatch = key.match(/^([A-Za-z0-9]+)_([A-Za-z0-9]+)$/);
   if (underscoreMatch) {
     return [underscoreMatch[1], underscoreMatch[2]];
+  }
+
+  // Simple symbol with no separator: "HYPE", "BTC", "ETH" → [symbol, USD]
+  const simpleMatch = key.match(/^[A-Za-z0-9]+$/);
+  if (simpleMatch) {
+    return [key, "USD"];
   }
 
   return null;
