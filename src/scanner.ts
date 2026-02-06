@@ -18,16 +18,26 @@ import type {
   ChainState,
   ContractState,
   MetadataFile,
+  CustomOracleOutputData,
   OracleOutput,
-  OracleOutputData,
   OutputFile,
   ScannerState,
+  StandardOracleOutputData,
+  StandardOracleFeeds,
 } from "./types.js";
 
-export async function runScanner(): Promise<void> {
+export interface RunScannerOptions {
+  forceRescan?: boolean;
+}
+
+export async function runScanner(options: RunScannerOptions = {}): Promise<void> {
   console.log("=== Oracle Scanner Starting ===");
   const startTime = Date.now();
   const logPerOracle = process.env.LOG_PER_ORACLE === "1";
+  const forceRescan = options.forceRescan === true;
+  if (forceRescan) {
+    console.log("  [scanner] Force rescan enabled");
+  }
 
   const state = await loadState();
   const feedProviderMatcher = new FeedProviderMatcher();
@@ -96,12 +106,13 @@ export async function runScanner(): Promise<void> {
         chainState,
         feedProviderMatcher,
         factoryVerifiedMap,
-        logPerOracle
+        logPerOracle,
+        forceRescan
       );
     }
 
     // Rescan upgradable oracles (24h check)
-    await rescanUpgradableOracles(chainId, chainState);
+    await rescanUpgradableOracles(chainId, chainState, forceRescan);
 
     const output = buildOutputFile(chainId, chainState, feedProviderMatcher);
     outputs.set(chainId, output);
@@ -122,7 +133,8 @@ async function processOracle(
   chainState: ChainState,
   feedProviderMatcher: FeedProviderMatcher,
   factoryVerifiedMap: Map<Address, boolean>,
-  logPerOracle: boolean
+  logPerOracle: boolean,
+  forceRescan: boolean
 ): Promise<void> {
   const now = new Date().toISOString();
 
@@ -140,10 +152,16 @@ async function processOracle(
   }
   contractState.lastSeenAt = now;
 
+  if (forceRescan && !isNew) {
+    contractState.classification = null;
+    contractState.proxy = null;
+  }
+
   // Check if factory-verified first - only fetch feeds if verified
   const hasStandardClassification =
     contractState.classification?.kind === "MorphoChainlinkOracleV2";
-  const shouldCheckFactory = !(hasStandardClassification && !contractState.proxy);
+  const shouldCheckFactory =
+    forceRescan || !(hasStandardClassification && !contractState.proxy);
 
   if (shouldCheckFactory) {
     const isVerified = factoryVerifiedMap.get(oracleAddress) || false;
@@ -216,11 +234,16 @@ async function processOracle(
 
 async function rescanUpgradableOracles(
   chainId: ChainId,
-  chainState: ChainState
+  chainState: ChainState,
+  forceRescan: boolean
 ): Promise<void> {
   const upgradable = Object.entries(chainState.contracts).filter(
-    ([_, contract]) =>
-      contract.proxy && needsImplRescan(contract.proxy, IMPL_RESCAN_INTERVAL_MS)
+    ([_, contract]) => {
+      if (!contract.proxy) return false;
+      return forceRescan
+        ? true
+        : needsImplRescan(contract.proxy, IMPL_RESCAN_INTERVAL_MS);
+    }
   );
 
   if (upgradable.length === 0) {
@@ -289,34 +312,10 @@ function buildOracleOutput(
   feedProviderMatcher: FeedProviderMatcher
 ): OracleOutput {
   const classification = contract.classification;
-  let type: "standard" | "custom" | "unknown" = "unknown";
-  let verifiedByFactory = false;
-  let data: OracleOutputData = {
-    baseFeedOne: null,
-    baseFeedTwo: null,
-    quoteFeedOne: null,
-    quoteFeedTwo: null,
-  };
-
-  if (classification?.kind === "MorphoChainlinkOracleV2") {
-    type = "standard";
-    verifiedByFactory = classification.verifiedByFactory;
-    const feeds = classification.feeds;
-    data = {
-      baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
-      baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
-      quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
-      quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
-    };
-  } else if (classification?.kind === "CustomAdapter") {
-    type = "custom";
-  }
-
-  return {
+  const base = {
     address,
     chainId,
-    type,
-    verifiedByFactory,
+    verifiedByFactory: false,
     lastUpdated: contract.lastSeenAt,
     isUpgradable: !!contract.proxy,
     proxy: {
@@ -325,9 +324,84 @@ function buildOracleOutput(
       implementation: contract.proxy?.implementation || undefined,
       lastImplChangeAt: contract.proxy?.lastImplChangeAt,
     },
-    data,
     lastScannedAt: contract.lastSeenAt,
   };
+
+  if (classification?.kind === "MorphoChainlinkOracleV2") {
+    const feeds = classification.feeds;
+    return {
+      ...base,
+      type: "standard",
+      verifiedByFactory: classification.verifiedByFactory,
+      data: {
+        baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
+        baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
+        quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
+        quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
+      },
+    };
+  }
+
+  if (classification?.kind === "CustomAdapter") {
+    const data: CustomOracleOutputData = {
+      adapterId: classification.adapterId,
+      adapterName: classification.adapterName,
+    };
+    const feeds = enrichPartialFeeds(
+      classification.feeds,
+      chainId,
+      feedProviderMatcher
+    );
+    if (feeds) {
+      data.feeds = feeds;
+    }
+    if (classification.metadata && Object.keys(classification.metadata).length > 0) {
+      data.metadata = classification.metadata;
+    }
+    return {
+      ...base,
+      type: "custom",
+      data,
+    };
+  }
+
+  const reason =
+    classification?.kind === "Unknown" ? classification.reason : "Unclassified";
+  return {
+    ...base,
+    type: "unknown",
+    data: { reason },
+  };
+}
+
+function enrichPartialFeeds(
+  feeds: Partial<StandardOracleFeeds> | undefined,
+  chainId: ChainId,
+  feedProviderMatcher: FeedProviderMatcher
+): Partial<StandardOracleOutputData> | undefined {
+  if (!feeds) return undefined;
+
+  const out: Partial<StandardOracleOutputData> = {};
+  if (feeds.baseFeedOne) {
+    out.baseFeedOne = feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId);
+  }
+  if (feeds.baseFeedTwo) {
+    out.baseFeedTwo = feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId);
+  }
+  if (feeds.quoteFeedOne) {
+    out.quoteFeedOne = feedProviderMatcher.enrichFeed(
+      feeds.quoteFeedOne,
+      chainId
+    );
+  }
+  if (feeds.quoteFeedTwo) {
+    out.quoteFeedTwo = feedProviderMatcher.enrichFeed(
+      feeds.quoteFeedTwo,
+      chainId
+    );
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function buildMetadata(

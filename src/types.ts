@@ -106,10 +106,9 @@ export interface FeedProviderRegistry {
 // Output Format (published to Gist for frontend consumption)
 // ============================================================================
 
-export interface OracleOutput {
+export interface OracleOutputBase {
   address: Address;
   chainId: ChainId;
-  type: "standard" | "custom" | "unknown";
   verifiedByFactory: boolean;
   lastUpdated: string;
   isUpgradable: boolean;
@@ -119,20 +118,43 @@ export interface OracleOutput {
     implementation?: Address;
     lastImplChangeAt?: string;
   };
-  data: OracleOutputData;
   lastScannedAt: string;
 }
 
-export interface OracleOutputData {
+export type OracleOutput =
+  | (OracleOutputBase & {
+      type: "standard";
+      data: StandardOracleOutputData;
+    })
+  | (OracleOutputBase & {
+      type: "custom";
+      data: CustomOracleOutputData;
+    })
+  | (OracleOutputBase & {
+      type: "unknown";
+      data: UnknownOracleOutputData;
+    });
+
+export interface StandardOracleOutputData {
   baseFeedOne: EnrichedFeed | null;
   baseFeedTwo: EnrichedFeed | null;
   quoteFeedOne: EnrichedFeed | null;
   quoteFeedTwo: EnrichedFeed | null;
 }
 
+export interface CustomOracleOutputData {
+  adapterId: string;
+  adapterName: string;
+  feeds?: Partial<StandardOracleOutputData>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UnknownOracleOutputData {
+  reason: string;
+}
+
 export interface EnrichedFeed {
   address: Address;
-  chain: { id: ChainId };
   description: string;
   pair: [string, string] | [];
   provider: FeedProvider | null;

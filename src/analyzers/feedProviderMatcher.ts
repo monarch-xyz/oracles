@@ -31,7 +31,6 @@ export class FeedProviderMatcher {
     if (matched) {
       return {
         address,
-        chain: { id: chainId },
         description: matched.description,
         pair: matched.pair || [],
         provider: matched.provider,
@@ -41,7 +40,6 @@ export class FeedProviderMatcher {
 
     return {
       address,
-      chain: { id: chainId },
       description: "Unknown Feed",
       pair: [],
       provider: null,
