@@ -3,6 +3,7 @@ import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
 import { fetchOracleFeeds } from "./sources/morphoFactory.js";
 import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
 import { detectAndFetchV1Oracle } from "./sources/oracleV1Detector.js";
+import { detectAndFetchV2OracleByBytecode } from "./sources/oracleV2BytecodeDetector.js";
 import { fetchChainlinkProvider } from "./sources/chainlink.js";
 import { fetchRedstoneProvider } from "./sources/redstone.js";
 import {
@@ -182,7 +183,7 @@ async function processOracle(
   const needsClassification = forceRescan || (!hasV1Classification && !hasV2Classification);
 
   if (needsClassification) {
-    // V2: Verify via factory, then read feeds
+    // 1. Factory verified → V2 (verification: factory)
     const isFactoryVerified = factoryVerifiedMap.get(oracleAddress) || false;
     if (isFactoryVerified) {
       const feeds = await fetchOracleFeeds(chainId, oracleAddress);
@@ -190,17 +191,30 @@ async function processOracle(
         contractState.classification = {
           kind: "MorphoChainlinkOracleV2",
           verifiedByFactory: true,
+          verificationMethod: "factory",
           feeds,
         };
       }
     } else {
-      // V1: Verify via bytecode, then read feeds
+      // 2. V1 bytecode match → V1 (verification: bytecode)
       const v1Result = await detectAndFetchV1Oracle(chainId, oracleAddress);
       if (v1Result.isV1 && v1Result.feeds) {
         contractState.classification = {
           kind: "MorphoChainlinkOracleV1",
+          verificationMethod: "bytecode",
           feeds: v1Result.feeds,
         };
+      } else {
+        // 3. V2 bytecode match → V2 (verification: bytecode)
+        const v2Result = await detectAndFetchV2OracleByBytecode(chainId, oracleAddress);
+        if (v2Result.isV2Bytecode && v2Result.feeds) {
+          contractState.classification = {
+            kind: "MorphoChainlinkOracleV2",
+            verifiedByFactory: false,
+            verificationMethod: "bytecode",
+            feeds: v2Result.feeds,
+          };
+        }
       }
     }
   }

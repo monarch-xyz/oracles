@@ -40,14 +40,18 @@ export interface ProxyInfo {
   }>;
 }
 
+export type VerificationMethod = "factory" | "bytecode";
+
 export type OracleClassification =
   | {
       kind: "MorphoChainlinkOracleV2";
-      verifiedByFactory: boolean;
+      verifiedByFactory: boolean;  // Legacy: true = factory, false = bytecode
+      verificationMethod: VerificationMethod;
       feeds: StandardOracleFeeds;
     }
   | {
       kind: "MorphoChainlinkOracleV1";
+      verificationMethod: "bytecode";
       feeds: StandardOracleFeeds;
     }
   | {
