@@ -12,10 +12,18 @@ const MARKETS_QUERY = `
             id
           }
         }
+        collateralAsset {
+          address
+        }
       }
     }
   }
 `;
+
+const BLACKLIST_TOKENS = new Set<Address>([
+  "0xda1c2c3c8fad503662e41e324fc644dc2c5e0ccd",
+  "0x8413d2a624a9fa8b6d3ec7b22cf7f62e55d6bc83",
+]);
 
 interface MarketItem {
   oracle: {
@@ -23,6 +31,9 @@ interface MarketItem {
     chain: {
       id: number;
     };
+  };
+  collateralAsset?: {
+    address?: string;
   };
 }
 
@@ -56,8 +67,14 @@ export async function fetchOraclesFromMorphoApi(): Promise<OracleFromApi[]> {
   const items = result.data?.markets?.items || [];
 
   const oracleMap = new Map<string, OracleFromApi>();
+  let blacklistedMarkets = 0;
 
   for (const item of items) {
+    const collateralAddress = item.collateralAsset?.address?.toLowerCase() as Address | undefined;
+    if (collateralAddress && BLACKLIST_TOKENS.has(collateralAddress)) {
+      blacklistedMarkets += 1;
+      continue;
+    }
     if (!item.oracle?.address) continue;
 
     const address = item.oracle.address.toLowerCase() as Address;
@@ -73,6 +90,9 @@ export async function fetchOraclesFromMorphoApi(): Promise<OracleFromApi[]> {
   }
 
   const oracles = Array.from(oracleMap.values());
+  if (blacklistedMarkets > 0) {
+    console.log(`[morpho-api] Skipped ${blacklistedMarkets} markets with blacklisted collateral`);
+  }
   console.log(`[morpho-api] Found ${oracles.length} unique oracles across all chains`);
 
   return oracles;
