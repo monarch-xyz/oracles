@@ -31,7 +31,8 @@ const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
   8453: "base",
   42161: "arbitrum",
   137: "polygon",
-  // Unichain, Hyperliquid, Monad - no Redstone registry yet
+  999: "hyperevm",
+  // Unichain, Monad - no Redstone registry yet
 };
 
 export async function fetchRedstoneProvider(
