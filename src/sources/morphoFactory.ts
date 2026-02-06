@@ -108,8 +108,10 @@ export async function fetchOracleFeeds(
       allowFailure: true,
     });
 
-    if (results.some((result) => result.status !== "success")) {
-      console.log(`[fetchOracleFeeds] Multicall incomplete for ${oracleAddress}`);
+    // Only require feed functions (0-3) to succeed - vault functions (4-7) are optional (V1 vs V2)
+    const feedResults = results.slice(0, 4);
+    if (feedResults.some((result) => result.status !== "success")) {
+      console.log(`[fetchOracleFeeds] Feed multicall incomplete for ${oracleAddress}`);
       return null;
     }
 
@@ -118,30 +120,27 @@ export async function fetchOracleFeeds(
       baseFeedTwo,
       quoteFeedOne,
       quoteFeedTwo,
-      baseVault,
-      quoteVault,
-      baseVaultConversionSample,
-      quoteVaultConversionSample,
-    ] = results.map((result) => result.result) as [
-      Address,
-      Address,
-      Address,
-      Address,
-      Address,
-      Address,
-      bigint,
-      bigint,
-    ];
+    ] = feedResults.map((result) => result.result) as [Address, Address, Address, Address];
+
+    // Vault functions are optional (V1 oracles don't have them)
+    const vaultResults = results.slice(4);
+    const [baseVault, quoteVault, baseVaultConversionSample, quoteVaultConversionSample] =
+      vaultResults.map((r) => (r.status === "success" ? r.result : null)) as [
+        Address | null,
+        Address | null,
+        bigint | null,
+        bigint | null,
+      ];
 
     return {
       baseFeedOne: toNullableAddress(baseFeedOne.toLowerCase() as Address),
       baseFeedTwo: toNullableAddress(baseFeedTwo.toLowerCase() as Address),
       quoteFeedOne: toNullableAddress(quoteFeedOne.toLowerCase() as Address),
       quoteFeedTwo: toNullableAddress(quoteFeedTwo.toLowerCase() as Address),
-      baseVault: toNullableAddress(baseVault.toLowerCase() as Address),
-      quoteVault: toNullableAddress(quoteVault.toLowerCase() as Address),
-      baseVaultConversionSample,
-      quoteVaultConversionSample,
+      baseVault: baseVault ? toNullableAddress(baseVault.toLowerCase() as Address) : null,
+      quoteVault: quoteVault ? toNullableAddress(quoteVault.toLowerCase() as Address) : null,
+      baseVaultConversionSample: baseVaultConversionSample ?? 0n,
+      quoteVaultConversionSample: quoteVaultConversionSample ?? 0n,
     };
   } catch (error) {
     console.log(`[fetchOracleFeeds] Error for ${oracleAddress}:`, error);
