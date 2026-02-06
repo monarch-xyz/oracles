@@ -35,6 +35,7 @@ export class FeedProviderMatcher {
         pair: matched.pair || [],
         provider: matched.provider,
         decimals: matched.decimals,
+        tier: matched.tier,
       };
     }
 

@@ -6,7 +6,8 @@ interface ChainlinkFeed {
   proxyAddress: string;
   decimals: number;
   heartbeat?: number;
-  deviationThreshold?: number;
+  threshold?: number; // deviation threshold
+  feedCategory?: string; // tier: "verified", "high", "medium", "low", "custom", etc.
   docs?: {
     baseAsset?: string;
     quoteAsset?: string;
@@ -62,7 +63,8 @@ export async function fetchChainlinkProvider(
       pair,
       decimals: feed.decimals,
       heartbeat: feed.heartbeat,
-      deviationThreshold: feed.deviationThreshold,
+      deviationThreshold: feed.threshold,
+      tier: feed.feedCategory || undefined,
     };
   }
 

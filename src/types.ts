@@ -94,6 +94,7 @@ export interface FeedInfo {
   decimals?: number;
   heartbeat?: number;
   deviationThreshold?: number;
+  tier?: string; // Chainlink feed category: "verified", "monitored", "high", "medium", "low", "custom", etc.
 }
 
 export interface FeedProviderRegistry {
@@ -160,6 +161,7 @@ export interface EnrichedFeed {
   pair: [string, string] | [];
   provider: FeedProvider | null;
   decimals?: number;
+  tier?: string; // Feed tier/category (e.g., Chainlink's "verified", "high", etc.)
 }
 
 export interface OutputFile {
