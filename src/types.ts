@@ -47,6 +47,10 @@ export type OracleClassification =
       feeds: StandardOracleFeeds;
     }
   | {
+      kind: "MorphoChainlinkOracleV1";
+      feeds: StandardOracleFeeds;
+    }
+  | {
       kind: "CustomAdapter";
       adapterId: string;
       adapterName: string;

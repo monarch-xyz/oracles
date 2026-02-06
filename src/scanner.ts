@@ -2,6 +2,7 @@ import { ACTIVE_CHAINS, IMPL_RESCAN_INTERVAL_MS } from "./config.js";
 import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
 import { fetchOracleFeeds } from "./sources/morphoFactory.js";
 import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
+import { detectAndFetchV1Oracle } from "./sources/oracleV1Detector.js";
 import { fetchChainlinkProvider } from "./sources/chainlink.js";
 import { fetchRedstoneProvider } from "./sources/redstone.js";
 import {
@@ -175,33 +176,38 @@ async function processOracle(
     contractState.proxy = null;
   }
 
-  // Check factory verification
-  const hasStandardClassification =
-    contractState.classification?.kind === "MorphoChainlinkOracleV2";
-  const shouldCheckFactory =
-    forceRescan || !(hasStandardClassification && !contractState.proxy);
+  // Determine if we need to reclassify
+  const hasV1Classification = contractState.classification?.kind === "MorphoChainlinkOracleV1";
+  const hasV2Classification = contractState.classification?.kind === "MorphoChainlinkOracleV2";
+  const needsClassification = forceRescan || (!hasV1Classification && !hasV2Classification);
 
-  const isVerified = shouldCheckFactory
-    ? factoryVerifiedMap.get(oracleAddress) || false
-    : (contractState.classification?.kind === "MorphoChainlinkOracleV2" && 
-       contractState.classification.verifiedByFactory) || false;
-
-  // Try to fetch feeds for ALL oracles (verified or not)
-  // This supports V1 oracles that aren't verified by V2 factory
-  if (shouldCheckFactory || !hasStandardClassification) {
-    const feeds = await fetchOracleFeeds(chainId, oracleAddress);
-    if (feeds) {
-      // Has valid feed structure - it's a standard MorphoChainlink oracle (V1 or V2)
-      contractState.classification = {
-        kind: "MorphoChainlinkOracleV2", // Keep same kind for both V1/V2
-        verifiedByFactory: isVerified,
-        feeds,
-      };
+  if (needsClassification) {
+    // V2: Verify via factory, then read feeds
+    const isFactoryVerified = factoryVerifiedMap.get(oracleAddress) || false;
+    if (isFactoryVerified) {
+      const feeds = await fetchOracleFeeds(chainId, oracleAddress);
+      if (feeds) {
+        contractState.classification = {
+          kind: "MorphoChainlinkOracleV2",
+          verifiedByFactory: true,
+          feeds,
+        };
+      }
+    } else {
+      // V1: Verify via bytecode, then read feeds
+      const v1Result = await detectAndFetchV1Oracle(chainId, oracleAddress);
+      if (v1Result.isV1 && v1Result.feeds) {
+        contractState.classification = {
+          kind: "MorphoChainlinkOracleV1",
+          feeds: v1Result.feeds,
+        };
+      }
     }
   }
 
   const isStandard =
-    contractState.classification?.kind === "MorphoChainlinkOracleV2";
+    contractState.classification?.kind === "MorphoChainlinkOracleV2" ||
+    contractState.classification?.kind === "MorphoChainlinkOracleV1";
 
   if (isStandard) {
     // Standard Morpho oracles are not proxies; skip proxy detection.
@@ -243,10 +249,12 @@ async function processOracle(
 
   const typeLabel =
     contractState.classification?.kind === "MorphoChainlinkOracleV2"
-      ? "standard"
-      : contractState.classification?.kind === "CustomAdapter"
-        ? "custom"
-        : "unknown";
+      ? "standard-v2"
+      : contractState.classification?.kind === "MorphoChainlinkOracleV1"
+        ? "standard-v1"
+        : contractState.classification?.kind === "CustomAdapter"
+          ? "custom"
+          : "unknown";
 
   if (logPerOracle) {
     console.log(
@@ -356,6 +364,21 @@ function buildOracleOutput(
       ...base,
       type: "standard",
       verifiedByFactory: classification.verifiedByFactory,
+      data: {
+        baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
+        baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
+        quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
+        quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
+      },
+    };
+  }
+
+  if (classification?.kind === "MorphoChainlinkOracleV1") {
+    const feeds = classification.feeds;
+    return {
+      ...base,
+      type: "standard",
+      verifiedByFactory: false, // V1 has no factory verification
       data: {
         baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
         baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),

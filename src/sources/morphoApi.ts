@@ -3,8 +3,8 @@ import type { Address, ChainId } from "../types.js";
 const MORPHO_API_URL = "https://blue-api.morpho.org/graphql";
 
 const MARKETS_QUERY = `
-  query Markets {
-    markets(first: 1000) {
+  query Markets($skip: Int!) {
+    markets(first: 1000, skip: $skip) {
       items {
         oracle {
           address
@@ -15,6 +15,9 @@ const MARKETS_QUERY = `
         collateralAsset {
           address
         }
+      }
+      pageInfo {
+        countTotal
       }
     }
   }
@@ -41,6 +44,9 @@ interface MarketsResponse {
   data: {
     markets: {
       items: MarketItem[];
+      pageInfo: {
+        countTotal: number;
+      };
     };
   };
 }
@@ -53,47 +59,64 @@ export interface OracleFromApi {
 export async function fetchOraclesFromMorphoApi(): Promise<OracleFromApi[]> {
   console.log("[morpho-api] Fetching all market oracles...");
 
-  const response = await fetch(MORPHO_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: MARKETS_QUERY }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Morpho API error: ${response.status}`);
-  }
-
-  const result = (await response.json()) as MarketsResponse;
-  const items = result.data?.markets?.items || [];
-
   const oracleMap = new Map<string, OracleFromApi>();
   let blacklistedMarkets = 0;
+  let skip = 0;
+  let totalFetched = 0;
+  let countTotal = 0;
 
-  for (const item of items) {
-    const collateralAddress = item.collateralAsset?.address?.toLowerCase() as Address | undefined;
-    if (collateralAddress && BLACKLIST_TOKENS.has(collateralAddress)) {
-      blacklistedMarkets += 1;
-      continue;
+  // Paginate through all markets
+  while (true) {
+    const response = await fetch(MORPHO_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: MARKETS_QUERY,
+        variables: { skip },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Morpho API error: ${response.status}`);
     }
-    if (!item.oracle?.address) continue;
 
-    const address = item.oracle.address.toLowerCase() as Address;
-    const chainId = item.oracle.chain.id as ChainId;
-    const key = `${chainId}-${address}`;
+    const result = (await response.json()) as MarketsResponse;
+    const items = result.data?.markets?.items || [];
+    countTotal = result.data?.markets?.pageInfo?.countTotal || 0;
 
-    if (!oracleMap.has(key)) {
-      oracleMap.set(key, {
-        address,
-        chainId,
-      });
+    if (items.length === 0) break;
+
+    totalFetched += items.length;
+    console.log(`[morpho-api] Fetched ${totalFetched}/${countTotal} markets...`);
+
+    for (const item of items) {
+      const collateralAddress = item.collateralAsset?.address?.toLowerCase() as Address | undefined;
+      if (collateralAddress && BLACKLIST_TOKENS.has(collateralAddress)) {
+        blacklistedMarkets += 1;
+        continue;
+      }
+      if (!item.oracle?.address) continue;
+
+      const address = item.oracle.address.toLowerCase() as Address;
+      const chainId = item.oracle.chain.id as ChainId;
+      const key = `${chainId}-${address}`;
+
+      if (!oracleMap.has(key)) {
+        oracleMap.set(key, { address, chainId });
+      }
     }
+
+    skip += items.length;
+
+    // Exit if we've fetched all
+    if (totalFetched >= countTotal) break;
   }
 
   const oracles = Array.from(oracleMap.values());
   if (blacklistedMarkets > 0) {
     console.log(`[morpho-api] Skipped ${blacklistedMarkets} markets with blacklisted collateral`);
   }
-  console.log(`[morpho-api] Found ${oracles.length} unique oracles across all chains`);
+  console.log(`[morpho-api] Found ${oracles.length} unique oracles from ${countTotal} total markets`);
 
   return oracles;
 }
