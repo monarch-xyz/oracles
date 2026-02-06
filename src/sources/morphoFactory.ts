@@ -22,7 +22,7 @@ const hyperliquid = defineChain({
 });
 
 const monad = defineChain({
-  id: 10143,
+  id: 143,
   name: "Monad Testnet",
   nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
   rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
@@ -35,7 +35,7 @@ const CHAINS = {
   137: polygon,
   130: unichain,
   999: hyperliquid,
-  10143: monad,
+  143: monad,
 } as const;
 
 import { abi as MORPHO_CHAINLINK_V2_ABI } from "../abi/morpho-chainlink-oracle-v2.js";

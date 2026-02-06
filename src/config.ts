@@ -47,15 +47,15 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
     rpcUrl: process.env.RPC_HYPEREVM || "https://rpc.hyperliquid.xyz/evm",
     morphoChainlinkV2Factory: "0x0000000000000000000000000000000000000000",
   },
-  10143: {
-    id: 10143,
+  143: {
+    id: 143,
     name: "monad",
     rpcUrl: process.env.RPC_MONAD || "https://testnet-rpc.monad.xyz",
     morphoChainlinkV2Factory: "0x0000000000000000000000000000000000000000",
   },
 };
 
-export const ACTIVE_CHAINS: ChainId[] = [1, 8453, 42161, 137, 130, 999, 10143];
+export const ACTIVE_CHAINS: ChainId[] = [1, 8453, 42161, 137, 130, 999, 143];
 
 export const REDSTONE_REGISTRY_URL =
   "https://raw.githubusercontent.com/redstone-finance/redstone-oracles-monorepo/main/packages/relayer-remote-config/main/relayer-manifests-multi-feed/{network}MultiFeed.json";

@@ -1,6 +1,6 @@
 export type Address = `0x${string}`;
 // Mainnet, Base, Arbitrum, Polygon, Unichain, Hyperliquid EVM, Monad
-export type ChainId = 1 | 8453 | 42161 | 137 | 130 | 999 | 10143;
+export type ChainId = 1 | 8453 | 42161 | 137 | 130 | 999 | 143;
 
 // ============================================================================
 // Scanner State (internal, persisted to Gist)

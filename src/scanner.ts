@@ -140,21 +140,6 @@ async function processOracle(
   }
   contractState.lastSeenAt = now;
 
-  // Check proxy status (prefer Etherscan v2, fallback to EIP-1967)
-  const etherscanProxy = await detectProxyViaEtherscan(chainId, oracleAddress);
-  if (etherscanProxy?.isProxy) {
-    contractState.proxy = {
-      isProxy: true,
-      proxyType: "EIP1967",
-      implementation: etherscanProxy.implementation,
-      lastImplScanAt: now,
-    };
-  } else {
-    // Fallback to onchain EIP-1967 check
-    const proxyInfo = await detectProxy(chainId, oracleAddress);
-    contractState.proxy = proxyInfo;
-  }
-
   // Check if factory-verified first - only fetch feeds if verified
   const hasStandardClassification =
     contractState.classification?.kind === "MorphoChainlinkOracleV2";
@@ -171,6 +156,32 @@ async function processOracle(
           feeds,
         };
       }
+    }
+  }
+
+  const isStandard =
+    contractState.classification?.kind === "MorphoChainlinkOracleV2";
+
+  if (isStandard) {
+    // Standard Morpho oracles are not proxies; skip proxy detection.
+    contractState.proxy = null;
+  } else {
+    // Check proxy status (prefer Etherscan v2, fallback to EIP-1967)
+    const etherscanProxy = await detectProxyViaEtherscan(
+      chainId,
+      oracleAddress
+    );
+    if (etherscanProxy?.isProxy) {
+      contractState.proxy = {
+        isProxy: true,
+        proxyType: "EIP1967",
+        implementation: etherscanProxy.implementation,
+        lastImplScanAt: now,
+      };
+    } else {
+      // Fallback to onchain EIP-1967 check
+      const proxyInfo = await detectProxy(chainId, oracleAddress);
+      contractState.proxy = proxyInfo;
     }
   }
 
