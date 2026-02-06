@@ -5,6 +5,12 @@ import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
 import { fetchChainlinkProvider } from "./sources/chainlink.js";
 import { fetchRedstoneProvider } from "./sources/redstone.js";
 import {
+  fetchCompoundProvider,
+  fetchLidoProvider,
+  fetchOvalProvider,
+  fetchPythProvider,
+} from "./sources/hardcoded/index.js";
+import {
   detectProxy,
   detectProxyViaEtherscan,
   needsImplRescan,
@@ -60,13 +66,25 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
   for (const chainId of ACTIVE_CHAINS) {
     console.log(`\n--- Processing chain ${chainId} ---`);
 
+    // Load dynamic providers (fetched from external registries)
     const [chainlinkProvider, redstoneProvider] = await Promise.all([
       fetchChainlinkProvider(chainId),
       fetchRedstoneProvider(chainId),
     ]);
 
+    // Load hardcoded providers
+    const compoundProvider = fetchCompoundProvider(chainId);
+    const lidoProvider = fetchLidoProvider(chainId);
+    const ovalProvider = fetchOvalProvider(chainId);
+    const pythProvider = fetchPythProvider(chainId);
+
+    // Add all providers to matcher
     feedProviderMatcher.addProvider(chainlinkProvider);
     feedProviderMatcher.addProvider(redstoneProvider);
+    feedProviderMatcher.addProvider(compoundProvider);
+    feedProviderMatcher.addProvider(lidoProvider);
+    feedProviderMatcher.addProvider(ovalProvider);
+    feedProviderMatcher.addProvider(pythProvider);
 
     const chainState = getChainState(state, chainId);
     const oracleAddresses = oraclesByChain.get(chainId) || [];

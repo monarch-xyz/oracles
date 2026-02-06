@@ -80,6 +80,7 @@ export type FeedProvider =
   | "Pyth"
   | "Oval"
   | "Lido"
+  | "Compound"
   | "Pendle"
   | "Spectra"
   | "Unknown";

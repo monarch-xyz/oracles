@@ -51,7 +51,8 @@ export async function fetchChainlinkProvider(
     if (!feed.proxyAddress) continue;
 
     const address = feed.proxyAddress.toLowerCase() as Address;
-    const pair = parsePair(feed.path || feed.name);
+    // Prefer docs.baseAsset/quoteAsset, fallback to parsing name
+    const pair = extractPair(feed);
 
     feeds[address] = {
       address,
@@ -75,10 +76,18 @@ export async function fetchChainlinkProvider(
   };
 }
 
-function parsePair(path: string): [string, string] | null {
-  const match = path.match(/^(.+)\s*\/\s*(.+)$/);
+function extractPair(feed: ChainlinkFeed): [string, string] | null {
+  // Prefer structured docs data
+  if (feed.docs?.baseAsset && feed.docs?.quoteAsset) {
+    return [feed.docs.baseAsset, feed.docs.quoteAsset];
+  }
+  
+  // Fallback: parse from name (e.g., "DAI / USD")
+  const name = feed.name || feed.path;
+  const match = name.match(/^(.+)\s*\/\s*(.+)$/);
   if (match) {
     return [match[1].trim(), match[2].trim()];
   }
+  
   return null;
 }
