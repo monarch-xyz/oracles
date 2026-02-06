@@ -194,13 +194,23 @@ async function processOracle(
         };
       }
     } else {
-      // V1: Verify via bytecode, then read feeds
+      // Try V1 bytecode detection first
       const v1Result = await detectAndFetchV1Oracle(chainId, oracleAddress);
       if (v1Result.isV1 && v1Result.feeds) {
         contractState.classification = {
           kind: "MorphoChainlinkOracleV1",
           feeds: v1Result.feeds,
         };
+      } else {
+        // Fallback: Try reading feeds directly (for non-standard bytecode like HyperEVM)
+        const feeds = await fetchOracleFeeds(chainId, oracleAddress);
+        if (feeds) {
+          contractState.classification = {
+            kind: "MorphoChainlinkOracleV2", // Treat as V2-compatible
+            verifiedByFactory: false,
+            feeds,
+          };
+        }
       }
     }
   }
