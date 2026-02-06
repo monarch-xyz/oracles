@@ -45,7 +45,7 @@ export type VerificationMethod = "factory" | "bytecode";
 export type OracleClassification =
   | {
       kind: "MorphoChainlinkOracleV2";
-      verifiedByFactory: boolean;  // Legacy: true = factory, false = bytecode
+      verifiedByFactory: boolean; // Legacy: true = factory, false = bytecode
       verificationMethod: VerificationMethod;
       feeds: StandardOracleFeeds;
     }

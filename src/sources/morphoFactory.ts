@@ -1,9 +1,5 @@
-import {
-  createPublicClient,
-  http,
-  defineChain,
-} from "viem";
-import { mainnet, base, arbitrum, polygon } from "viem/chains";
+import { http, createPublicClient, defineChain } from "viem";
+import { arbitrum, base, mainnet, polygon } from "viem/chains";
 import { CHAIN_CONFIGS } from "../config.js";
 import type { Address, ChainId, StandardOracleFeeds } from "../types.js";
 
@@ -72,7 +68,7 @@ function toNullableAddress(addr: Address): Address | null {
 
 export async function fetchOracleFeeds(
   chainId: ChainId,
-  oracleAddress: Address
+  oracleAddress: Address,
 ): Promise<StandardOracleFeeds | null> {
   const client = getClient(chainId);
 
@@ -130,12 +126,9 @@ export async function fetchOracleFeeds(
       return null;
     }
 
-    const [
-      baseFeedOne,
-      baseFeedTwo,
-      quoteFeedOne,
-      quoteFeedTwo,
-    ] = feedResults.map((result) => result.result) as [Address, Address, Address, Address];
+    const [baseFeedOne, baseFeedTwo, quoteFeedOne, quoteFeedTwo] = feedResults.map(
+      (result) => result.result,
+    ) as [Address, Address, Address, Address];
 
     // Vault functions are optional (V1 oracles don't have them)
     const vaultResults = results.slice(4);

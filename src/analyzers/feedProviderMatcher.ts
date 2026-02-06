@@ -48,7 +48,10 @@ export class FeedProviderMatcher {
   }
 
   getStats(): Record<ChainId, Record<FeedProvider, number>> {
-    const stats: Record<ChainId, Record<FeedProvider, number>> = {} as Record<ChainId, Record<FeedProvider, number>>;
+    const stats: Record<ChainId, Record<FeedProvider, number>> = {} as Record<
+      ChainId,
+      Record<FeedProvider, number>
+    >;
     for (const registry of this.providers.values()) {
       if (!stats[registry.chainId]) {
         stats[registry.chainId] = {} as Record<FeedProvider, number>;

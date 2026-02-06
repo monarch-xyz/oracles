@@ -3,9 +3,9 @@ import type {
   Address,
   ChainId,
   ChainState,
+  MetadataFile,
   OutputFile,
   ScannerState,
-  MetadataFile,
 } from "../types.js";
 
 const DEFAULT_STATE: ScannerState = {
@@ -53,7 +53,7 @@ export async function loadState(): Promise<ScannerState> {
 export async function saveToGist(
   state: ScannerState,
   outputs: Map<ChainId, OutputFile>,
-  metadata: MetadataFile
+  metadata: MetadataFile,
 ): Promise<void> {
   if (!GIST_ID || !GITHUB_TOKEN) {
     console.log("[state] No Gist configured, saving locally");
@@ -94,10 +94,7 @@ export async function saveToGist(
   }
 }
 
-export function getChainState(
-  state: ScannerState,
-  chainId: ChainId
-): ChainState {
+export function getChainState(state: ScannerState, chainId: ChainId): ChainState {
   if (!state.chains[chainId]) {
     state.chains[chainId] = {
       cursor: { lastProcessedBlock: 0 },

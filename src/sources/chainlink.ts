@@ -22,9 +22,7 @@ const CHAINLINK_PROVIDER_URLS: Partial<Record<ChainId, string>> = {
   // Unichain, Hyperliquid, Monad - no Chainlink registry yet
 };
 
-export async function fetchChainlinkProvider(
-  chainId: ChainId
-): Promise<FeedProviderRegistry> {
+export async function fetchChainlinkProvider(chainId: ChainId): Promise<FeedProviderRegistry> {
   const url = CHAINLINK_PROVIDER_URLS[chainId];
   if (!url) {
     console.log(`[chainlink] No registry for chain ${chainId}`);
@@ -40,9 +38,7 @@ export async function fetchChainlinkProvider(
 
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch Chainlink feeds: ${response.status} ${response.statusText}`
-    );
+    throw new Error(`Failed to fetch Chainlink feeds: ${response.status} ${response.statusText}`);
   }
 
   const data = (await response.json()) as ChainlinkFeed[];
@@ -83,13 +79,13 @@ function extractPair(feed: ChainlinkFeed): [string, string] | null {
   if (feed.docs?.baseAsset && feed.docs?.quoteAsset) {
     return [feed.docs.baseAsset, feed.docs.quoteAsset];
   }
-  
+
   // Fallback: parse from name (e.g., "DAI / USD")
   const name = feed.name || feed.path;
   const match = name.match(/^(.+)\s*\/\s*(.+)$/);
   if (match) {
     return [match[1].trim(), match[2].trim()];
   }
-  
+
   return null;
 }

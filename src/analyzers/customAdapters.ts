@@ -15,9 +15,7 @@ export const CUSTOM_ADAPTER_REGISTRY: CustomAdapterRegistry = {
       vendor: "Pendle",
       description: "Pendle Principal Token oracle adapter",
       knownImplementations: {
-        1: [
-          "0x66a1096C6366b2529274dF4f5D8247827fe4CEA8".toLowerCase() as Address,
-        ],
+        1: ["0x66a1096C6366b2529274dF4f5D8247827fe4CEA8".toLowerCase() as Address],
       },
       priceMethod: "getOraclePrice()",
       documentationUrl: "https://docs.pendle.finance",
@@ -50,9 +48,7 @@ export const CUSTOM_ADAPTER_REGISTRY: CustomAdapterRegistry = {
       vendor: "Lido",
       description: "Lido stETH/ETH exchange rate",
       knownImplementations: {
-        1: [
-          "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84".toLowerCase() as Address,
-        ],
+        1: ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84".toLowerCase() as Address],
       },
       priceMethod: "getPooledEthByShares()",
       documentationUrl: "https://docs.lido.fi",
@@ -74,7 +70,7 @@ export const CUSTOM_ADAPTER_REGISTRY: CustomAdapterRegistry = {
 export function matchCustomAdapter(
   address: Address,
   implementation: Address | null,
-  chainId: ChainId
+  chainId: ChainId,
 ): OracleClassification | null {
   const addrToCheck = implementation || address;
 
@@ -97,16 +93,14 @@ export function matchCustomAdapter(
   return null;
 }
 
-export function getAdapterById(
-  adapterId: string
-): CustomAdapterPattern | undefined {
+export function getAdapterById(adapterId: string): CustomAdapterPattern | undefined {
   return CUSTOM_ADAPTER_REGISTRY.patterns.find((p) => p.id === adapterId);
 }
 
 export function addKnownImplementation(
   adapterId: string,
   chainId: ChainId,
-  address: Address
+  address: Address,
 ): void {
   const pattern = getAdapterById(adapterId);
   if (pattern) {
@@ -114,8 +108,8 @@ export function addKnownImplementation(
       pattern.knownImplementations[chainId] = [];
     }
     const lowered = address.toLowerCase() as Address;
-    if (!pattern.knownImplementations[chainId]!.includes(lowered)) {
-      pattern.knownImplementations[chainId]!.push(lowered);
+    if (!pattern.knownImplementations[chainId]?.includes(lowered)) {
+      pattern.knownImplementations[chainId]?.push(lowered);
     }
   }
 }

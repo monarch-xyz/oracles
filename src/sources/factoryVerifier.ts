@@ -1,6 +1,6 @@
-import { getClient } from "./morphoFactory.js";
 import { CHAIN_CONFIGS } from "../config.js";
 import type { Address, ChainId } from "../types.js";
+import { getClient } from "./morphoFactory.js";
 
 const FACTORY_ABI = [
   {
@@ -14,7 +14,7 @@ const FACTORY_ABI = [
 
 export async function isFactoryVerifiedOracle(
   chainId: ChainId,
-  oracleAddress: Address
+  oracleAddress: Address,
 ): Promise<boolean> {
   const config = CHAIN_CONFIGS[chainId];
   const factoryAddress = config.morphoChainlinkV2Factory;
@@ -32,8 +32,7 @@ export async function isFactoryVerifiedOracle(
       functionName: "isMorphoChainlinkOracleV2",
       args: [oracleAddress],
     });
-    
-    console.log('calling result', result);
+
     return result;
   } catch {
     // Factory might not have this method, fall back to false
@@ -51,7 +50,7 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 
 export async function fetchFactoryVerifiedMap(
   chainId: ChainId,
-  oracleAddresses: Address[]
+  oracleAddresses: Address[],
 ): Promise<Map<Address, boolean>> {
   const verified = new Map<Address, boolean>();
   const logMulticall = process.env.LOG_MULTICALL === "1";
@@ -85,10 +84,10 @@ export async function fetchFactoryVerifiedMap(
 
       if (logMulticall) {
         const trueCount = results.filter(
-          (result) => result.status === "success" && result.result
+          (result) => result.status === "success" && result.result,
         ).length;
         console.log(
-          `[factory] multicall batch size=${batch.length} true=${trueCount} false=${batch.length - trueCount}`
+          `[factory] multicall batch size=${batch.length} true=${trueCount} false=${batch.length - trueCount}`,
         );
       }
 
@@ -102,7 +101,7 @@ export async function fetchFactoryVerifiedMap(
       });
     } catch (error) {
       console.log(
-        `[factory] Multicall failed on chain ${chainId}: ${error}. Falling back to individual calls.`
+        `[factory] Multicall failed on chain ${chainId}: ${error}. Falling back to individual calls.`,
       );
       for (const address of batch) {
         const isVerified = await isFactoryVerifiedOracle(chainId, address);

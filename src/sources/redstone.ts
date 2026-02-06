@@ -29,15 +29,13 @@ type RedstoneManifest = Record<string, RedstoneFeed> | RedstoneMultiFeedManifest
 const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
   1: "ethereum",
   8453: "base",
-  42161: "arbitrumOne",  // File is arbitrumOneMultiFeed.json
+  42161: "arbitrumOne", // File is arbitrumOneMultiFeed.json
   137: "polygon",
   999: "hyperevm",
   // Unichain, Monad - no Redstone registry yet
 };
 
-export async function fetchRedstoneProvider(
-  chainId: ChainId
-): Promise<FeedProviderRegistry> {
+export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProviderRegistry> {
   const networkName = NETWORK_NAMES[chainId];
 
   if (!networkName) {
@@ -56,9 +54,7 @@ export async function fetchRedstoneProvider(
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.log(
-        `[redstone] No feeds found for ${networkName}: ${response.status}`
-      );
+      console.log(`[redstone] No feeds found for ${networkName}: ${response.status}`);
       return {
         chainId,
         provider: "Redstone",
@@ -83,9 +79,7 @@ export async function fetchRedstoneProvider(
           description: key,
           pair,
           heartbeat: feed.updateTriggersOverrides?.timeSinceLastUpdateInMilliseconds
-            ? Math.floor(
-                feed.updateTriggersOverrides.timeSinceLastUpdateInMilliseconds / 1000
-              )
+            ? Math.floor(feed.updateTriggersOverrides.timeSinceLastUpdateInMilliseconds / 1000)
             : undefined,
           deviationThreshold: feed.updateTriggersOverrides?.deviationPercentage,
         };
@@ -140,7 +134,7 @@ function parsePair(key: string): [string, string] | null {
   // Try Redstone FUNDAMENTAL format: "sYUSD_FUNDAMENTAL" → [sYUSD, USD]
   const fundamentalMatch = key.match(/^(.+?)_FUNDAMENTAL$/i);
   if (fundamentalMatch) {
-    return [fundamentalMatch[1], 'USD'];
+    return [fundamentalMatch[1], "USD"];
   }
 
   // Try underscore format: "WETH_ETH" → [WETH, ETH]

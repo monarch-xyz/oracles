@@ -116,7 +116,9 @@ export async function fetchOraclesFromMorphoApi(): Promise<OracleFromApi[]> {
   if (blacklistedMarkets > 0) {
     console.log(`[morpho-api] Skipped ${blacklistedMarkets} markets with blacklisted collateral`);
   }
-  console.log(`[morpho-api] Found ${oracles.length} unique oracles from ${countTotal} total markets`);
+  console.log(
+    `[morpho-api] Found ${oracles.length} unique oracles from ${countTotal} total markets`,
+  );
 
   return oracles;
 }

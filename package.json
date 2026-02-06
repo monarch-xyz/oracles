@@ -6,23 +6,25 @@
   "main": "dist/index.js",
   "scripts": {
     "scan": "tsx src/index.ts",
-    "test:mainnet": "tsx src/test-mainnet.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "biome check .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
-    "@types/node": "^25.2.0",
     "dotenv": "^17.2.3",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "viem": "^2.45.1"
   },
   "devDependencies": {
-    "prettier": "^3.8.1"
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^25.2.0",
+    "tsx": "^4.21.0",
+    "vitest": "^2.1.9"
   }
 }

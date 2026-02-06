@@ -1,37 +1,37 @@
+import { matchCustomAdapter } from "./analyzers/customAdapters.js";
+import { FeedProviderMatcher } from "./analyzers/feedProviderMatcher.js";
+import {
+  detectProxy,
+  detectProxyViaEtherscan,
+  needsImplRescan,
+} from "./analyzers/proxyDetector.js";
 import { ACTIVE_CHAINS, IMPL_RESCAN_INTERVAL_MS } from "./config.js";
-import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
-import { fetchOracleFeeds } from "./sources/morphoFactory.js";
-import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
-import { detectAndFetchV1Oracle } from "./sources/oracleV1Detector.js";
-import { detectAndFetchV2OracleByBytecode } from "./sources/oracleV2BytecodeDetector.js";
 import { fetchChainlinkProvider } from "./sources/chainlink.js";
-import { fetchRedstoneProvider } from "./sources/redstone.js";
+import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
 import {
   fetchCompoundProvider,
   fetchLidoProvider,
   fetchOvalProvider,
   fetchPythProvider,
 } from "./sources/hardcoded/index.js";
-import {
-  detectProxy,
-  detectProxyViaEtherscan,
-  needsImplRescan,
-} from "./analyzers/proxyDetector.js";
-import { matchCustomAdapter } from "./analyzers/customAdapters.js";
-import { FeedProviderMatcher } from "./analyzers/feedProviderMatcher.js";
-import { loadState, saveToGist, getChainState } from "./state/store.js";
+import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
+import { validateOraclesByBytecodeOneByOne } from "./sources/oracleBytecodeValidation.js";
+import { fetchV1OracleFeedsBatch, fetchV2OracleFeedsBatch } from "./sources/oracleFeedFetcher.js";
+import { fetchRedstoneProvider } from "./sources/redstone.js";
+import { getChainState, loadState, saveToGist } from "./state/store.js";
 import type {
   Address,
   ChainId,
   ChainState,
   ContractState,
-  MetadataFile,
   CustomOracleOutputData,
+  MetadataFile,
+  OracleClassification,
   OracleOutput,
   OutputFile,
   ScannerState,
-  StandardOracleOutputData,
   StandardOracleFeeds,
+  StandardOracleOutputData,
 } from "./types.js";
 
 export interface RunScannerOptions {
@@ -61,7 +61,7 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     if (!oraclesByChain.has(oracle.chainId)) {
       oraclesByChain.set(oracle.chainId, []);
     }
-    oraclesByChain.get(oracle.chainId)!.push(oracle.address);
+    oraclesByChain.get(oracle.chainId)?.push(oracle.address);
   }
 
   // 3. Process each chain
@@ -90,33 +90,48 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
 
     const chainState = getChainState(state, chainId);
     const oracleAddresses = oraclesByChain.get(chainId) || [];
+    const now = new Date().toISOString();
+    const classificationTargets: Address[] = [];
+    const newAddresses = new Set<Address>();
 
     console.log(`  Found ${oracleAddresses.length} oracles from Morpho API`);
 
-    const factoryCheckTargets: Address[] = [];
     for (const oracleAddress of oracleAddresses) {
-      const existing = chainState.contracts[oracleAddress];
-      const hasStandardClassification =
-        existing?.classification?.kind === "MorphoChainlinkOracleV2";
-      const shouldCheckFactory = !(hasStandardClassification && !existing?.proxy);
-      if (shouldCheckFactory) {
-        factoryCheckTargets.push(oracleAddress);
+      let contractState = chainState.contracts[oracleAddress];
+      const isNew = !contractState;
+
+      if (!contractState) {
+        contractState = {
+          firstSeenAt: now,
+          lastSeenAt: now,
+          proxy: null,
+          classification: null,
+        };
+        chainState.contracts[oracleAddress] = contractState;
+        newAddresses.add(oracleAddress);
+      }
+
+      contractState.lastSeenAt = now;
+
+      if (forceRescan && !isNew) {
+        contractState.classification = null;
+        contractState.proxy = null;
+      }
+
+      const hasV1Classification = contractState.classification?.kind === "MorphoChainlinkOracleV1";
+      const hasV2Classification = contractState.classification?.kind === "MorphoChainlinkOracleV2";
+      const needsClassification = forceRescan || (!hasV1Classification && !hasV2Classification);
+
+      if (needsClassification) {
+        classificationTargets.push(oracleAddress);
       }
     }
 
-    const factoryVerifiedMap = await fetchFactoryVerifiedMap(
+    const resolvedClassifications = await resolveStandardClassifications(
       chainId,
-      factoryCheckTargets
+      classificationTargets,
     );
-    if (factoryCheckTargets.length > 0) {
-      let trueCount = 0;
-      for (const address of factoryCheckTargets) {
-        if (factoryVerifiedMap.get(address)) trueCount += 1;
-      }
-      console.log(
-        `  [factory] multicall results: ${trueCount} true / ${factoryCheckTargets.length} total`
-      );
-    }
+    const classificationTargetSet = new Set(classificationTargets);
 
     // Process each oracle
     for (const oracleAddress of oracleAddresses) {
@@ -125,9 +140,10 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
         oracleAddress,
         chainState,
         feedProviderMatcher,
-        factoryVerifiedMap,
+        resolvedClassifications,
+        classificationTargetSet,
         logPerOracle,
-        forceRescan
+        newAddresses.has(oracleAddress),
       );
     }
 
@@ -152,71 +168,16 @@ async function processOracle(
   oracleAddress: Address,
   chainState: ChainState,
   feedProviderMatcher: FeedProviderMatcher,
-  factoryVerifiedMap: Map<Address, boolean>,
+  resolvedClassifications: Map<Address, OracleClassification>,
+  classificationTargets: Set<Address>,
   logPerOracle: boolean,
-  forceRescan: boolean
+  isNew: boolean,
 ): Promise<void> {
-  const now = new Date().toISOString();
+  const contractState = chainState.contracts[oracleAddress];
+  const now = contractState.lastSeenAt;
 
-  let contractState = chainState.contracts[oracleAddress];
-  const isNew = !contractState;
-
-  if (!contractState) {
-    contractState = {
-      firstSeenAt: now,
-      lastSeenAt: now,
-      proxy: null,
-      classification: null,
-    };
-    chainState.contracts[oracleAddress] = contractState;
-  }
-  contractState.lastSeenAt = now;
-
-  if (forceRescan && !isNew) {
-    contractState.classification = null;
-    contractState.proxy = null;
-  }
-
-  // Determine if we need to reclassify
-  const hasV1Classification = contractState.classification?.kind === "MorphoChainlinkOracleV1";
-  const hasV2Classification = contractState.classification?.kind === "MorphoChainlinkOracleV2";
-  const needsClassification = forceRescan || (!hasV1Classification && !hasV2Classification);
-
-  if (needsClassification) {
-    // 1. Factory verified → V2 (verification: factory)
-    const isFactoryVerified = factoryVerifiedMap.get(oracleAddress) || false;
-    if (isFactoryVerified) {
-      const feeds = await fetchOracleFeeds(chainId, oracleAddress);
-      if (feeds) {
-        contractState.classification = {
-          kind: "MorphoChainlinkOracleV2",
-          verifiedByFactory: true,
-          verificationMethod: "factory",
-          feeds,
-        };
-      }
-    } else {
-      // 2. V1 bytecode match → V1 (verification: bytecode)
-      const v1Result = await detectAndFetchV1Oracle(chainId, oracleAddress);
-      if (v1Result.isV1 && v1Result.feeds) {
-        contractState.classification = {
-          kind: "MorphoChainlinkOracleV1",
-          verificationMethod: "bytecode",
-          feeds: v1Result.feeds,
-        };
-      } else {
-        // 3. V2 bytecode match → V2 (verification: bytecode)
-        const v2Result = await detectAndFetchV2OracleByBytecode(chainId, oracleAddress);
-        if (v2Result.isV2Bytecode && v2Result.feeds) {
-          contractState.classification = {
-            kind: "MorphoChainlinkOracleV2",
-            verifiedByFactory: false,
-            verificationMethod: "bytecode",
-            feeds: v2Result.feeds,
-          };
-        }
-      }
-    }
+  if (classificationTargets.has(oracleAddress)) {
+    contractState.classification = resolvedClassifications.get(oracleAddress) ?? null;
   }
 
   const isStandard =
@@ -228,10 +189,7 @@ async function processOracle(
     contractState.proxy = null;
   } else {
     // Check proxy status (prefer Etherscan v2, fallback to EIP-1967)
-    const etherscanProxy = await detectProxyViaEtherscan(
-      chainId,
-      oracleAddress
-    );
+    const etherscanProxy = await detectProxyViaEtherscan(chainId, oracleAddress);
     if (etherscanProxy?.isProxy) {
       contractState.proxy = {
         isProxy: true,
@@ -272,50 +230,130 @@ async function processOracle(
 
   if (logPerOracle) {
     console.log(
-      `  [${oracleAddress.slice(0, 10)}...] ${typeLabel}, proxy=${!!contractState.proxy}${isNew ? " (new)" : ""}`
+      `  [${oracleAddress.slice(0, 10)}...] ${typeLabel}, proxy=${!!contractState.proxy}${isNew ? " (new)" : ""}`,
     );
   }
+}
+
+async function resolveStandardClassifications(
+  chainId: ChainId,
+  classificationTargets: Address[],
+): Promise<Map<Address, OracleClassification>> {
+  const resolved = new Map<Address, OracleClassification>();
+
+  if (classificationTargets.length === 0) {
+    return resolved;
+  }
+
+  // Stage 1: Validate V2 by factory (batch).
+  const factoryVerifiedMap = await fetchFactoryVerifiedMap(chainId, classificationTargets);
+  const factoryV2Addresses = classificationTargets.filter((address) =>
+    factoryVerifiedMap.get(address),
+  );
+  const nonFactoryAddresses = classificationTargets.filter(
+    (address) => !factoryVerifiedMap.get(address),
+  );
+  console.log(
+    `  [classification] factory-verified-v2=${factoryV2Addresses.length}, non-factory=${nonFactoryAddresses.length}`,
+  );
+
+  // Stage 2: Fetch V2 feeds for factory-verified addresses (batch).
+  const factoryV2Feeds = await fetchV2OracleFeedsBatch(chainId, factoryV2Addresses);
+  for (const address of factoryV2Addresses) {
+    const feeds = factoryV2Feeds.get(address);
+    if (!feeds) continue;
+    resolved.set(address, {
+      kind: "MorphoChainlinkOracleV2",
+      verifiedByFactory: true,
+      verificationMethod: "factory",
+      feeds,
+    });
+  }
+  console.log(
+    `  [classification] factory-v2-with-feeds=${factoryV2Feeds.size} / ${factoryV2Addresses.length}`,
+  );
+
+  // Stage 3: Validate by bytecode (1 by 1).
+  const bytecodeResults = await validateOraclesByBytecodeOneByOne(chainId, nonFactoryAddresses);
+  const v1BytecodeAddresses = bytecodeResults
+    .filter((result) => result.kind === "v1")
+    .map((result) => result.address);
+  const v2BytecodeAddresses = bytecodeResults
+    .filter((result) => result.kind === "v2")
+    .map((result) => result.address);
+  console.log(
+    `  [classification] bytecode-v1=${v1BytecodeAddresses.length}, bytecode-v2=${v2BytecodeAddresses.length}`,
+  );
+
+  // Stage 4: Fetch info grouped by oracle type (batch).
+  const [v1FeedsMap, v2FeedsMap] = await Promise.all([
+    fetchV1OracleFeedsBatch(chainId, v1BytecodeAddresses),
+    fetchV2OracleFeedsBatch(chainId, v2BytecodeAddresses),
+  ]);
+
+  for (const address of v1BytecodeAddresses) {
+    const feeds = v1FeedsMap.get(address);
+    if (!feeds) continue;
+    resolved.set(address, {
+      kind: "MorphoChainlinkOracleV1",
+      verificationMethod: "bytecode",
+      feeds,
+    });
+  }
+
+  for (const address of v2BytecodeAddresses) {
+    const feeds = v2FeedsMap.get(address);
+    if (!feeds) continue;
+    resolved.set(address, {
+      kind: "MorphoChainlinkOracleV2",
+      verifiedByFactory: false,
+      verificationMethod: "bytecode",
+      feeds,
+    });
+  }
+
+  console.log(
+    `  [classification] bytecode-v1-with-feeds=${v1FeedsMap.size}, bytecode-v2-with-feeds=${v2FeedsMap.size}`,
+  );
+
+  return resolved;
 }
 
 async function rescanUpgradableOracles(
   chainId: ChainId,
   chainState: ChainState,
-  forceRescan: boolean
+  forceRescan: boolean,
 ): Promise<void> {
-  const upgradable = Object.entries(chainState.contracts).filter(
-    ([_, contract]) => {
-      if (!contract.proxy) return false;
-      return forceRescan
-        ? true
-        : needsImplRescan(contract.proxy, IMPL_RESCAN_INTERVAL_MS);
-    }
-  );
+  const upgradable = Object.entries(chainState.contracts).filter(([_, contract]) => {
+    if (!contract.proxy) return false;
+    return forceRescan ? true : needsImplRescan(contract.proxy, IMPL_RESCAN_INTERVAL_MS);
+  });
 
   if (upgradable.length === 0) {
-    console.log(`  No upgradable oracles need rescanning`);
+    console.log("  No upgradable oracles need rescanning");
     return;
   }
 
   console.log(`  Rescanning ${upgradable.length} upgradable oracles...`);
 
   for (const [address, contract] of upgradable) {
-    const etherscanProxy = await detectProxyViaEtherscan(
-      chainId,
-      address as Address
-    );
+    const etherscanProxy = await detectProxyViaEtherscan(chainId, address as Address);
     if (etherscanProxy && contract.proxy) {
       if (etherscanProxy.implementation !== contract.proxy.implementation) {
         console.log(
-          `  [${address.slice(0, 10)}...] Implementation changed: ${contract.proxy.implementation} -> ${etherscanProxy.implementation}`
+          `  [${address.slice(0, 10)}...] Implementation changed: ${contract.proxy.implementation} -> ${etherscanProxy.implementation}`,
         );
         contract.proxy.lastImplChangeAt = new Date().toISOString();
-        contract.proxy.previousImplementations = [
-          ...(contract.proxy.previousImplementations || []),
-          {
-            address: contract.proxy.implementation!,
-            detectedAt: contract.proxy.lastImplScanAt,
-          },
-        ];
+        const previousImplementation = contract.proxy.implementation;
+        if (previousImplementation) {
+          contract.proxy.previousImplementations = [
+            ...(contract.proxy.previousImplementations || []),
+            {
+              address: previousImplementation,
+              detectedAt: contract.proxy.lastImplScanAt,
+            },
+          ];
+        }
         contract.proxy.implementation = etherscanProxy.implementation;
       }
       contract.proxy.lastImplScanAt = new Date().toISOString();
@@ -326,17 +364,12 @@ async function rescanUpgradableOracles(
 function buildOutputFile(
   chainId: ChainId,
   chainState: ChainState,
-  feedProviderMatcher: FeedProviderMatcher
+  feedProviderMatcher: FeedProviderMatcher,
 ): OutputFile {
   const oracles: OracleOutput[] = [];
 
   for (const [address, contract] of Object.entries(chainState.contracts)) {
-    const oracle = buildOracleOutput(
-      address as Address,
-      chainId,
-      contract,
-      feedProviderMatcher
-    );
+    const oracle = buildOracleOutput(address as Address, chainId, contract, feedProviderMatcher);
     oracles.push(oracle);
   }
 
@@ -354,7 +387,7 @@ function buildOracleOutput(
   address: Address,
   chainId: ChainId,
   contract: ContractState,
-  feedProviderMatcher: FeedProviderMatcher
+  feedProviderMatcher: FeedProviderMatcher,
 ): OracleOutput {
   const classification = contract.classification;
   const base = {
@@ -407,11 +440,7 @@ function buildOracleOutput(
       adapterId: classification.adapterId,
       adapterName: classification.adapterName,
     };
-    const feeds = enrichPartialFeeds(
-      classification.feeds,
-      chainId,
-      feedProviderMatcher
-    );
+    const feeds = enrichPartialFeeds(classification.feeds, chainId, feedProviderMatcher);
     if (feeds) {
       data.feeds = feeds;
     }
@@ -425,8 +454,7 @@ function buildOracleOutput(
     };
   }
 
-  const reason =
-    classification?.kind === "Unknown" ? classification.reason : "Unclassified";
+  const reason = classification?.kind === "Unknown" ? classification.reason : "Unclassified";
   return {
     ...base,
     type: "unknown",
@@ -437,7 +465,7 @@ function buildOracleOutput(
 function enrichPartialFeeds(
   feeds: Partial<StandardOracleFeeds> | undefined,
   chainId: ChainId,
-  feedProviderMatcher: FeedProviderMatcher
+  feedProviderMatcher: FeedProviderMatcher,
 ): Partial<StandardOracleOutputData> | undefined {
   if (!feeds) return undefined;
 
@@ -449,16 +477,10 @@ function enrichPartialFeeds(
     out.baseFeedTwo = feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId);
   }
   if (feeds.quoteFeedOne) {
-    out.quoteFeedOne = feedProviderMatcher.enrichFeed(
-      feeds.quoteFeedOne,
-      chainId
-    );
+    out.quoteFeedOne = feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId);
   }
   if (feeds.quoteFeedTwo) {
-    out.quoteFeedTwo = feedProviderMatcher.enrichFeed(
-      feeds.quoteFeedTwo,
-      chainId
-    );
+    out.quoteFeedTwo = feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId);
   }
 
   return Object.keys(out).length > 0 ? out : undefined;
@@ -467,7 +489,7 @@ function enrichPartialFeeds(
 function buildMetadata(
   state: ScannerState,
   outputs: Map<ChainId, OutputFile>,
-  feedProviderMatcher: FeedProviderMatcher
+  feedProviderMatcher: FeedProviderMatcher,
 ): MetadataFile {
   const chains: MetadataFile["chains"] = {} as MetadataFile["chains"];
   const stats = feedProviderMatcher.getStats();
@@ -490,17 +512,11 @@ function buildMetadata(
     providerSources: {
       chainlink: {
         updatedAt: new Date().toISOString(),
-        feedCount: Object.values(stats).reduce(
-          (sum, s) => sum + (s.Chainlink || 0),
-          0
-        ),
+        feedCount: Object.values(stats).reduce((sum, s) => sum + (s.Chainlink || 0), 0),
       },
       redstone: {
         updatedAt: new Date().toISOString(),
-        feedCount: Object.values(stats).reduce(
-          (sum, s) => sum + (s.Redstone || 0),
-          0
-        ),
+        feedCount: Object.values(stats).reduce((sum, s) => sum + (s.Redstone || 0), 0),
       },
     },
   };
