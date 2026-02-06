@@ -130,9 +130,23 @@ export async function fetchRedstoneProvider(
 }
 
 function parsePair(key: string): [string, string] | null {
-  const match = key.match(/^(.+)\s*\/\s*(.+)$/);
-  if (match) {
-    return [match[1].trim(), match[2].trim()];
+  // Try standard format: "ETH / USD"
+  const slashMatch = key.match(/^(.+)\s*\/\s*(.+)$/);
+  if (slashMatch) {
+    return [slashMatch[1].trim(), slashMatch[2].trim()];
   }
+
+  // Try Redstone FUNDAMENTAL format: "sYUSD_FUNDAMENTAL" → [sYUSD, USD]
+  const fundamentalMatch = key.match(/^(.+?)_FUNDAMENTAL$/i);
+  if (fundamentalMatch) {
+    return [fundamentalMatch[1], 'USD'];
+  }
+
+  // Try underscore format: "WETH_ETH" → [WETH, ETH]
+  const underscoreMatch = key.match(/^([A-Za-z0-9]+)_([A-Za-z0-9]+)$/);
+  if (underscoreMatch) {
+    return [underscoreMatch[1], underscoreMatch[2]];
+  }
+
   return null;
 }
