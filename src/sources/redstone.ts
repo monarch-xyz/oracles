@@ -29,7 +29,7 @@ type RedstoneManifest = Record<string, RedstoneFeed> | RedstoneMultiFeedManifest
 const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
   1: "ethereum",
   8453: "base",
-  42161: "arbitrum",
+  42161: "arbitrumOne",  // File is arbitrumOneMultiFeed.json
   137: "polygon",
   999: "hyperevm",
   // Unichain, Monad - no Redstone registry yet
