@@ -2,6 +2,7 @@ import { getClient } from "./morphoFactory.js";
 import type { Address, ChainId, StandardOracleFeeds } from "../types.js";
 import { abi as MORPHO_CHAINLINK_V2_ABI } from "../abi/morpho-chainlink-oracle-v2.js";
 import { MORPHO_V2_NORMALIZED_BYTECODE } from "../bytecodes/morpho-chainlink-oracle-v2.js";
+import { MORPHO_HYPEREVM_NORMALIZED_BYTECODE } from "../bytecodes/morpho-chainlink-oracle-hyperevm.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -41,7 +42,8 @@ export interface V2BytecodeDetectionResult {
 }
 
 /**
- * Check if bytecode matches MorphoChainlinkOracle V2 (non-factory deployed).
+ * Check if bytecode matches MorphoChainlinkOracle V2 or HyperEVM variant.
+ * Returns true for both standard V2 bytecode and HyperEVM-specific variant.
  */
 async function isMorphoChainlinkOracleV2Bytecode(
   chainId: ChainId,
@@ -54,7 +56,12 @@ async function isMorphoChainlinkOracleV2Bytecode(
     if (!deployedBytecode) return false;
 
     const normalizedDeployed = normalizeBytecode(deployedBytecode);
-    return normalizedDeployed === MORPHO_V2_NORMALIZED_BYTECODE;
+    
+    // Check against known V2-compatible bytecode patterns
+    return (
+      normalizedDeployed === MORPHO_V2_NORMALIZED_BYTECODE ||
+      normalizedDeployed === MORPHO_HYPEREVM_NORMALIZED_BYTECODE
+    );
   } catch {
     return false;
   }
