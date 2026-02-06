@@ -175,23 +175,28 @@ async function processOracle(
     contractState.proxy = null;
   }
 
-  // Check if factory-verified first - only fetch feeds if verified
+  // Check factory verification
   const hasStandardClassification =
     contractState.classification?.kind === "MorphoChainlinkOracleV2";
   const shouldCheckFactory =
     forceRescan || !(hasStandardClassification && !contractState.proxy);
 
-  if (shouldCheckFactory) {
-    const isVerified = factoryVerifiedMap.get(oracleAddress) || false;
-    if (isVerified) {
-      const feeds = await fetchOracleFeeds(chainId, oracleAddress);
-      if (feeds) {
-        contractState.classification = {
-          kind: "MorphoChainlinkOracleV2",
-          verifiedByFactory: true,
-          feeds,
-        };
-      }
+  const isVerified = shouldCheckFactory
+    ? factoryVerifiedMap.get(oracleAddress) || false
+    : (contractState.classification?.kind === "MorphoChainlinkOracleV2" && 
+       contractState.classification.verifiedByFactory) || false;
+
+  // Try to fetch feeds for ALL oracles (verified or not)
+  // This supports V1 oracles that aren't verified by V2 factory
+  if (shouldCheckFactory || !hasStandardClassification) {
+    const feeds = await fetchOracleFeeds(chainId, oracleAddress);
+    if (feeds) {
+      // Has valid feed structure - it's a standard MorphoChainlink oracle (V1 or V2)
+      contractState.classification = {
+        kind: "MorphoChainlinkOracleV2", // Keep same kind for both V1/V2
+        verifiedByFactory: isVerified,
+        feeds,
+      };
     }
   }
 
