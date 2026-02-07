@@ -20,7 +20,7 @@ const CHAINLINK_PROVIDER_URLS: Partial<Record<ChainId, string>> = {
   137: "https://reference-data-directory.vercel.app/feeds-polygon-mainnet-katana.json",
   42161: "https://reference-data-directory.vercel.app/feeds-ethereum-mainnet-arbitrum-1.json",
   999: "https://reference-data-directory.vercel.app/feeds-hyperliquid-mainnet.json",
-  143: 'https://reference-data-directory.vercel.app/feeds-monad-mainnet.json',
+  143: "https://reference-data-directory.vercel.app/feeds-monad-mainnet.json",
 };
 
 export async function fetchChainlinkProvider(chainId: ChainId): Promise<FeedProviderRegistry> {

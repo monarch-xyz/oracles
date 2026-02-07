@@ -22,9 +22,11 @@ export interface ChainState {
 export interface ContractState {
   firstSeenAt: string;
   lastSeenAt: string;
-  proxy: ProxyInfo | null;
+  proxy: ProxyState;
   classification: OracleClassification | null;
 }
+
+export type ProxyState = ProxyInfo | NonProxyInfo | null;
 
 export interface ProxyInfo {
   isProxy: true;
@@ -38,6 +40,11 @@ export interface ProxyInfo {
     address: Address;
     detectedAt: string;
   }>;
+}
+
+export interface NonProxyInfo {
+  isProxy: false;
+  lastProxyScanAt: string;
 }
 
 export type VerificationMethod = "factory" | "bytecode";

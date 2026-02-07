@@ -34,6 +34,11 @@ import type {
   StandardOracleOutputData,
 } from "./types.js";
 
+interface ProcessOracleResult {
+  isStandard: boolean;
+  didProxyScan: boolean;
+}
+
 export interface RunScannerOptions {
   forceRescan?: boolean;
 }
@@ -132,10 +137,13 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
       classificationTargets,
     );
     const classificationTargetSet = new Set(classificationTargets);
+    let standardSkippedProxyScanCount = 0;
+    let cachedProxyScanCount = 0;
+    let freshProxyScanCount = 0;
 
     // Process each oracle
     for (const oracleAddress of oracleAddresses) {
-      await processOracle(
+      const result = await processOracle(
         chainId,
         oracleAddress,
         chainState,
@@ -145,7 +153,19 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
         logPerOracle,
         newAddresses.has(oracleAddress),
       );
+
+      if (result.isStandard) {
+        standardSkippedProxyScanCount += 1;
+      } else if (result.didProxyScan) {
+        freshProxyScanCount += 1;
+      } else {
+        cachedProxyScanCount += 1;
+      }
     }
+
+    console.log(
+      `  [proxy] fresh-scans=${freshProxyScanCount}, cached=${cachedProxyScanCount}, standard-skipped=${standardSkippedProxyScanCount}`,
+    );
 
     // Rescan upgradable oracles (24h check)
     await rescanUpgradableOracles(chainId, chainState, forceRescan);
@@ -172,9 +192,10 @@ async function processOracle(
   classificationTargets: Set<Address>,
   logPerOracle: boolean,
   isNew: boolean,
-): Promise<void> {
+): Promise<ProcessOracleResult> {
   const contractState = chainState.contracts[oracleAddress];
   const now = contractState.lastSeenAt;
+  let didProxyScan = false;
 
   if (classificationTargets.has(oracleAddress)) {
     contractState.classification = resolvedClassifications.get(oracleAddress) ?? null;
@@ -188,26 +209,17 @@ async function processOracle(
     // Standard Morpho oracles are not proxies; skip proxy detection.
     contractState.proxy = null;
   } else {
-    // Check proxy status (prefer Etherscan v2, fallback to EIP-1967)
-    const etherscanProxy = await detectProxyViaEtherscan(chainId, oracleAddress);
-    if (etherscanProxy?.isProxy) {
-      contractState.proxy = {
-        isProxy: true,
-        proxyType: "EIP1967",
-        implementation: etherscanProxy.implementation,
-        lastImplScanAt: now,
-      };
-    } else {
-      // Fallback to onchain EIP-1967 check
-      const proxyInfo = await detectProxy(chainId, oracleAddress);
-      contractState.proxy = proxyInfo;
+    // Only scan once for non-standard contracts. Later runs use cached proxy state.
+    if (contractState.proxy === null) {
+      didProxyScan = true;
+      contractState.proxy = await scanProxyStatus(chainId, oracleAddress, now);
     }
   }
 
   // If not verified or feeds fetch failed, try custom adapter match
   if (!contractState.classification) {
     // Try to match custom adapter
-    const impl = contractState.proxy?.implementation || null;
+    const impl = contractState.proxy?.isProxy ? contractState.proxy.implementation : null;
     const customMatch = matchCustomAdapter(oracleAddress, impl, chainId);
     if (customMatch) {
       contractState.classification = customMatch;
@@ -230,9 +242,39 @@ async function processOracle(
 
   if (logPerOracle) {
     console.log(
-      `  [${oracleAddress.slice(0, 10)}...] ${typeLabel}, proxy=${!!contractState.proxy}${isNew ? " (new)" : ""}`,
+      `  [${oracleAddress.slice(0, 10)}...] ${typeLabel}, proxy=${contractState.proxy?.isProxy === true}${isNew ? " (new)" : ""}`,
     );
   }
+
+  return { isStandard, didProxyScan };
+}
+
+async function scanProxyStatus(
+  chainId: ChainId,
+  oracleAddress: Address,
+  now: string,
+): Promise<ContractState["proxy"]> {
+  // Prefer Etherscan v2 because it is cheaper/faster than multiple storage reads.
+  const etherscanProxy = await detectProxyViaEtherscan(chainId, oracleAddress);
+  if (etherscanProxy?.isProxy) {
+    return {
+      isProxy: true,
+      proxyType: "EIP1967",
+      implementation: etherscanProxy.implementation,
+      lastImplScanAt: now,
+    };
+  }
+
+  // Fallback to onchain EIP-1967 slot checks.
+  const proxyInfo = await detectProxy(chainId, oracleAddress);
+  if (proxyInfo) {
+    return proxyInfo;
+  }
+
+  return {
+    isProxy: false,
+    lastProxyScanAt: now,
+  };
 }
 
 async function resolveStandardClassifications(
@@ -325,7 +367,7 @@ async function rescanUpgradableOracles(
   forceRescan: boolean,
 ): Promise<void> {
   const upgradable = Object.entries(chainState.contracts).filter(([_, contract]) => {
-    if (!contract.proxy) return false;
+    if (contract.proxy?.isProxy !== true) return false;
     return forceRescan ? true : needsImplRescan(contract.proxy, IMPL_RESCAN_INTERVAL_MS);
   });
 
@@ -337,8 +379,10 @@ async function rescanUpgradableOracles(
   console.log(`  Rescanning ${upgradable.length} upgradable oracles...`);
 
   for (const [address, contract] of upgradable) {
+    if (contract.proxy?.isProxy !== true) continue;
+
     const etherscanProxy = await detectProxyViaEtherscan(chainId, address as Address);
-    if (etherscanProxy && contract.proxy) {
+    if (etherscanProxy) {
       if (etherscanProxy.implementation !== contract.proxy.implementation) {
         console.log(
           `  [${address.slice(0, 10)}...] Implementation changed: ${contract.proxy.implementation} -> ${etherscanProxy.implementation}`,
@@ -390,17 +434,19 @@ function buildOracleOutput(
   feedProviderMatcher: FeedProviderMatcher,
 ): OracleOutput {
   const classification = contract.classification;
+  const isProxy = contract.proxy?.isProxy === true;
+
   const base = {
     address,
     chainId,
     verifiedByFactory: false,
     lastUpdated: contract.lastSeenAt,
-    isUpgradable: !!contract.proxy,
+    isUpgradable: isProxy,
     proxy: {
-      isProxy: !!contract.proxy,
-      proxyType: contract.proxy?.proxyType,
-      implementation: contract.proxy?.implementation || undefined,
-      lastImplChangeAt: contract.proxy?.lastImplChangeAt,
+      isProxy,
+      proxyType: isProxy ? contract.proxy.proxyType : undefined,
+      implementation: isProxy ? contract.proxy.implementation || undefined : undefined,
+      lastImplChangeAt: isProxy ? contract.proxy.lastImplChangeAt : undefined,
     },
     lastScannedAt: contract.lastSeenAt,
   };
