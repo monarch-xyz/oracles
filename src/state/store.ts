@@ -1,6 +1,6 @@
-import { GIST_ID, GITHUB_TOKEN } from "../config.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { GIST_ID, GITHUB_TOKEN } from "../config.js";
 import type {
   Address,
   ChainId,
@@ -152,10 +152,7 @@ async function saveToLocal(
 
   for (const [chainId, output] of outputs) {
     writes.push(
-      writeFile(
-        join(LOCAL_OUTPUT_DIR, `oracles.${chainId}.json`),
-        JSON.stringify(output, null, 2),
-      ),
+      writeFile(join(LOCAL_OUTPUT_DIR, `oracles.${chainId}.json`), JSON.stringify(output, null, 2)),
     );
   }
 

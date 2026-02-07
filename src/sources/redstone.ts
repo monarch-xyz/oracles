@@ -81,8 +81,7 @@ export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProvi
 
         const heartbeatMs =
           feed.updateTriggersOverrides?.timeSinceLastUpdateInMilliseconds ?? defaultHeartbeatMs;
-        const deviation =
-          feed.updateTriggersOverrides?.deviationPercentage ?? defaultDeviation;
+        const deviation = feed.updateTriggersOverrides?.deviationPercentage ?? defaultDeviation;
 
         feeds[address] = {
           address,

@@ -14,6 +14,25 @@ Scans Morpho market oracles across supported chains, classifies each oracle from
 - Matches feed addresses to provider registries (Chainlink, Redstone, hardcoded providers)
 - Writes `oracles.{chainId}.json`, `meta.json`, and `_state.json` to a Gist
 
+## Supported Oracles And Feeds
+
+Standard oracles can include embedded feed addresses (Morpho Chainlink V1/V2). Non-standard
+oracles are tracked separately and may or may not expose feeds.
+
+Supported oracle types:
+- Morpho Chainlink Oracle V2 (factory verified or bytecode verified)
+- Morpho Chainlink Oracle V1 (bytecode verified)
+- Custom adapters (known patterns; see `src/analyzers/customAdapters.ts`)
+- Unknown (fallback when no standard or custom match)
+
+Supported feed providers:
+- Chainlink (registry fetch)
+- Redstone (registry fetch)
+- Compound (hardcoded wrapper feeds)
+- Lido (hardcoded stETH rate feeds)
+- Oval (hardcoded wrapper feeds)
+- Pyth (hardcoded feeds)
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and configure:

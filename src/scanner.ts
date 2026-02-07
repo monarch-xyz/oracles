@@ -423,7 +423,8 @@ async function rescanUpgradableOracles(
           chainId,
         );
         contract.classification =
-          customMatch ?? ({
+          customMatch ??
+          ({
             kind: "Unknown",
             reason: "No standard feeds, no custom adapter match",
           } as const);
@@ -458,9 +459,14 @@ async function rescanUpgradableOracles(
       }
       proxyInfo.implementation = onchainProxy.implementation;
 
-      const customMatch = matchCustomAdapter(address as Address, onchainProxy.implementation, chainId);
+      const customMatch = matchCustomAdapter(
+        address as Address,
+        onchainProxy.implementation,
+        chainId,
+      );
       contract.classification =
-        customMatch ?? ({
+        customMatch ??
+        ({
           kind: "Unknown",
           reason: "No standard feeds, no custom adapter match",
         } as const);
