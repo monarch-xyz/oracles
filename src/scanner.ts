@@ -12,6 +12,7 @@ import {
   fetchCompoundProvider,
   fetchLidoProvider,
   fetchOvalProvider,
+  fetchPendleProvider,
   fetchPythProvider,
 } from "./sources/hardcoded/index.js";
 import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
@@ -87,11 +88,21 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
       fetchRedstoneProvider(chainId),
     ]);
 
+    const chainState = getChainState(state, chainId);
+    const oracleAddresses = oraclesByChain.get(chainId) || [];
+
     // Load hardcoded providers
     const compoundProvider = fetchCompoundProvider(chainId);
     const lidoProvider = fetchLidoProvider(chainId);
     const ovalProvider = fetchOvalProvider(chainId);
     const pythProvider = fetchPythProvider(chainId);
+
+    const pendleFeedAddresses = collectStandardOracleFeedAddresses(
+      oracleAddresses,
+      chainState,
+      forceRescan,
+    );
+    const pendleProvider = await fetchPendleProvider(chainId, pendleFeedAddresses);
 
     // Add all providers to matcher
     feedProviderMatcher.addProvider(chainlinkProvider);
@@ -100,9 +111,7 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     feedProviderMatcher.addProvider(lidoProvider);
     feedProviderMatcher.addProvider(ovalProvider);
     feedProviderMatcher.addProvider(pythProvider);
-
-    const chainState = getChainState(state, chainId);
-    const oracleAddresses = oraclesByChain.get(chainId) || [];
+    feedProviderMatcher.addProvider(pendleProvider);
     const now = new Date().toISOString();
     const classificationTargets: Address[] = [];
     const newAddresses = new Set<Address>();
@@ -196,6 +205,33 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Scanner completed in ${elapsed}s ===`);
+}
+
+function collectStandardOracleFeedAddresses(
+  oracleAddresses: Address[],
+  chainState: ChainState,
+  forceRescan: boolean,
+): Address[] {
+  const feedAddresses: Address[] = [];
+
+  for (const oracleAddress of oracleAddresses) {
+    const contract = chainState.contracts[oracleAddress];
+    const classification = contract?.classification;
+    if (!classification) continue;
+
+    const isStandard =
+      classification.kind === "MorphoChainlinkOracleV1" ||
+      classification.kind === "MorphoChainlinkOracleV2";
+    if (!isStandard) continue;
+
+    const feeds = classification.feeds;
+    if (feeds.baseFeedOne) feedAddresses.push(feeds.baseFeedOne);
+    if (feeds.baseFeedTwo) feedAddresses.push(feeds.baseFeedTwo);
+    if (feeds.quoteFeedOne) feedAddresses.push(feeds.quoteFeedOne);
+    if (feeds.quoteFeedTwo) feedAddresses.push(feeds.quoteFeedTwo);
+  }
+
+  return feedAddresses;
 }
 
 async function processOracle(

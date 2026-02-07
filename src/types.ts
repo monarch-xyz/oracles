@@ -106,6 +106,10 @@ export interface FeedInfo {
   provider: FeedProvider;
   description: string;
   pair: [string, string] | null;
+  baseDiscountPerYear?: string;
+  innerOracle?: Address;
+  pt?: Address;
+  ptSymbol?: string;
   decimals?: number;
   heartbeat?: number;
   deviationThreshold?: number;
@@ -177,6 +181,10 @@ export interface EnrichedFeed {
   description: string;
   pair: [string, string] | [];
   provider: FeedProvider | null;
+  baseDiscountPerYear?: string;
+  innerOracle?: Address;
+  pt?: Address;
+  ptSymbol?: string;
   decimals?: number;
   tier?: string; // Feed tier/category (e.g., Chainlink's "verified", "high", etc.)
   heartbeat?: number; // Update frequency in seconds (Chainlink, Redstone)

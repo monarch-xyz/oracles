@@ -83,7 +83,7 @@ Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
 | --- | --- | --- | --- |
 | `address` | `"0x..."` | always | Feed contract address |
 | `description` | `string` | always | Human-readable name, e.g. `"ETH / USD"`. `"Unknown Feed"` if not found in any registry. |
-| `pair` | `[string, string] \| []` | always | Parsed trading pair, e.g. `["ETH", "USD"]`. Empty array if unknown. |
+| `pair` | `[string, string] \| []` | always | Parsed trading pair, e.g. `["ETH", "USD"]`. Empty array if unknown. Pendle uses API symbol parsing: `PT-reUSD-25JUN2026` → `["PT-reUSD-25JUN2026", "reUSD"]`. |
 | `provider` | `string \| null` | always | Feed provider name (see values below). `null` if not found in any registry. |
 | `decimals` | `number` | optional | Answer precision (e.g. `8` for Chainlink USD feeds) |
 | `tier` | `string` | optional | Feed quality tier. Chainlink values: `"verified"`, `"monitored"`, `"high"`, `"medium"`, `"low"`, `"custom"`. |
@@ -91,6 +91,10 @@ Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
 | `deviationThreshold` | `number` | optional | Price deviation percentage that triggers an update. E.g. `0.5` = a 0.5% price move triggers an update. Present for Chainlink and Redstone feeds. |
 | `ens` | `string` | optional | Chainlink ENS slug for building the feed page URL. E.g. `"eth-usd"` → `https://data.chain.link/feeds/ethereum/mainnet/eth-usd`. Only present for Chainlink feeds. |
 | `feedType` | `string` | optional | Redstone feed pricing type. `"fundamental"` = asset priced vs its underlying (e.g. wstETH vs ETH). `"market"` = asset priced vs USD. Only present for Redstone feeds. |
+| `baseDiscountPerYear` | `string` | optional | Pendle feed parameter returned from the inner oracle. |
+| `innerOracle` | `string` | optional | Pendle inner oracle address. |
+| `pt` | `string` | optional | Pendle PT token address. |
+| `ptSymbol` | `string` | optional | Pendle PT token symbol. |
 
 **Provider values:** `"Chainlink"`, `"Redstone"`, `"Chronicle"`, `"Pyth"`, `"Oval"`, `"Lido"`, `"Compound"`, `"Pendle"`, `"Spectra"`, `"Unknown"`
 
