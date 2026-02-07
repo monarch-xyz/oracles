@@ -31,8 +31,9 @@ const NETWORK_NAMES: Partial<Record<ChainId, string>> = {
   8453: "base",
   42161: "arbitrumOne", // File is arbitrumOneMultiFeed.json
   137: "polygon",
+  130: "unichain",
   999: "hyperevm",
-  // Unichain, Monad - no Redstone registry yet
+  // Monad - no Redstone registry yet
 };
 
 export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProviderRegistry> {
