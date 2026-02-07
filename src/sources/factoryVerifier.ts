@@ -12,34 +12,6 @@ const FACTORY_ABI = [
   },
 ] as const;
 
-export async function isFactoryVerifiedOracle(
-  chainId: ChainId,
-  oracleAddress: Address,
-): Promise<boolean> {
-  const config = CHAIN_CONFIGS[chainId];
-  const factoryAddress = config.morphoChainlinkV2Factory;
-
-  if (factoryAddress === "0x0000000000000000000000000000000000000000") {
-    return false;
-  }
-
-  const client = getClient(chainId);
-
-  try {
-    const result = await client.readContract({
-      address: factoryAddress,
-      abi: FACTORY_ABI,
-      functionName: "isMorphoChainlinkOracleV2",
-      args: [oracleAddress],
-    });
-
-    return result;
-  } catch {
-    // Factory might not have this method, fall back to false
-    return false;
-  }
-}
-
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -101,12 +73,8 @@ export async function fetchFactoryVerifiedMap(
       });
     } catch (error) {
       console.log(
-        `[factory] Multicall failed on chain ${chainId}: ${error}. Falling back to individual calls.`,
+        `[factory] Multicall batch factory verification failed on chain ${chainId}: ${error}.`,
       );
-      for (const address of batch) {
-        const isVerified = await isFactoryVerifiedOracle(chainId, address);
-        verified.set(address, isVerified);
-      }
     }
   }
 

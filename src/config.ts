@@ -39,19 +39,19 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
     id: 130,
     name: "unichain",
     rpcUrl: process.env.RPC_UNICHAIN || "https://mainnet.unichain.org",
-    morphoChainlinkV2Factory: "0x0000000000000000000000000000000000000000",
+    morphoChainlinkV2Factory: "0x43269546e1D586a1f7200a0AC07e26f9631f7539",
   },
   999: {
     id: 999,
     name: "hyperevm",
     rpcUrl: process.env.RPC_HYPEREVM || "https://rpc.hyperliquid.xyz/evm",
-    morphoChainlinkV2Factory: "0x0000000000000000000000000000000000000000",
+    morphoChainlinkV2Factory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
   },
   143: {
     id: 143,
     name: "monad",
     rpcUrl: process.env.RPC_MONAD || "https://testnet-rpc.monad.xyz",
-    morphoChainlinkV2Factory: "0x0000000000000000000000000000000000000000",
+    morphoChainlinkV2Factory: "0xC8659Bcd5279DB664Be973aEFd752a5326653739",
   },
 };
 
