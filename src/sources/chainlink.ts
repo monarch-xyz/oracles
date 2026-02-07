@@ -3,6 +3,7 @@ import type { Address, ChainId, FeedInfo, FeedProviderRegistry } from "../types.
 interface ChainlinkFeed {
   name: string;
   path: string;
+  ens?: string;
   proxyAddress: string;
   decimals: number;
   heartbeat?: number;
@@ -62,6 +63,7 @@ export async function fetchChainlinkProvider(chainId: ChainId): Promise<FeedProv
       heartbeat: feed.heartbeat,
       deviationThreshold: feed.threshold,
       tier: feed.feedCategory || undefined,
+      ens: feed.ens || feed.path || undefined,
     };
   }
 

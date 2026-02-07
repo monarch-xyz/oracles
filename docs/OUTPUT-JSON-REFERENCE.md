@@ -89,6 +89,8 @@ Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
 | `tier` | `string` | optional | Feed quality tier. Chainlink values: `"verified"`, `"monitored"`, `"high"`, `"medium"`, `"low"`, `"custom"`. |
 | `heartbeat` | `number` | optional | Maximum update interval in **seconds**. E.g. `3600` = feed updates at least every hour. Present for Chainlink and Redstone feeds. |
 | `deviationThreshold` | `number` | optional | Price deviation percentage that triggers an update. E.g. `0.5` = a 0.5% price move triggers an update. Present for Chainlink and Redstone feeds. |
+| `ens` | `string` | optional | Chainlink ENS slug for building the feed page URL. E.g. `"eth-usd"` → `https://data.chain.link/feeds/ethereum/mainnet/eth-usd`. Only present for Chainlink feeds. |
+| `feedType` | `string` | optional | Redstone feed pricing type. `"fundamental"` = asset priced vs its underlying (e.g. wstETH vs ETH). `"market"` = asset priced vs USD. Only present for Redstone feeds. |
 
 **Provider values:** `"Chainlink"`, `"Redstone"`, `"Chronicle"`, `"Pyth"`, `"Oval"`, `"Lido"`, `"Compound"`, `"Pendle"`, `"Spectra"`, `"Unknown"`
 
@@ -201,7 +203,8 @@ Aggregate metadata across all chains, useful for dashboards and summaries.
           "decimals": 8,
           "tier": "verified",
           "heartbeat": 3600,
-          "deviationThreshold": 0.5
+          "deviationThreshold": 0.5,
+          "ens": "eth-usd"
         },
         "baseFeedTwo": null,
         "quoteFeedOne": {
@@ -212,7 +215,8 @@ Aggregate metadata across all chains, useful for dashboards and summaries.
           "decimals": 8,
           "tier": "verified",
           "heartbeat": 86400,
-          "deviationThreshold": 1
+          "deviationThreshold": 1,
+          "ens": "usdc-usd"
         },
         "quoteFeedTwo": null
       }

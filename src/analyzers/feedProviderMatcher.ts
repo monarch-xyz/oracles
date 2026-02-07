@@ -38,6 +38,8 @@ export class FeedProviderMatcher {
         tier: matched.tier,
         heartbeat: matched.heartbeat,
         deviationThreshold: matched.deviationThreshold,
+        ens: matched.ens,
+        feedType: matched.feedType,
       };
     }
 

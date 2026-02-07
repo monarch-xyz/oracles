@@ -68,10 +68,21 @@ export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProvi
     const feeds: Record<Address, FeedInfo> = {};
 
     if ("priceFeeds" in manifest && manifest.priceFeeds) {
+      const multiFeed = manifest as RedstoneMultiFeedManifest;
+      // Top-level defaults for heartbeat/deviation
+      const defaultHeartbeatMs = multiFeed.updateTriggers?.timeSinceLastUpdateInMilliseconds;
+      const defaultDeviation = multiFeed.updateTriggers?.deviationPercentage;
+
       for (const [key, feed] of Object.entries(manifest.priceFeeds)) {
         if (!feed.priceFeedAddress) continue;
         const address = feed.priceFeedAddress.toLowerCase() as Address;
         const pair = parsePair(key);
+        const isFundamental = /_FUNDAMENTAL$/i.test(key);
+
+        const heartbeatMs =
+          feed.updateTriggersOverrides?.timeSinceLastUpdateInMilliseconds ?? defaultHeartbeatMs;
+        const deviation =
+          feed.updateTriggersOverrides?.deviationPercentage ?? defaultDeviation;
 
         feeds[address] = {
           address,
@@ -79,10 +90,9 @@ export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProvi
           provider: "Redstone",
           description: key,
           pair,
-          heartbeat: feed.updateTriggersOverrides?.timeSinceLastUpdateInMilliseconds
-            ? Math.floor(feed.updateTriggersOverrides.timeSinceLastUpdateInMilliseconds / 1000)
-            : undefined,
-          deviationThreshold: feed.updateTriggersOverrides?.deviationPercentage,
+          heartbeat: heartbeatMs ? Math.floor(heartbeatMs / 1000) : undefined,
+          deviationThreshold: deviation,
+          feedType: isFundamental ? "fundamental" : "market",
         };
       }
     } else {
@@ -96,12 +106,17 @@ export async function fetchRedstoneProvider(chainId: ChainId): Promise<FeedProvi
             ? ([dataFeeds[0], dataFeeds[1]] as [string, string])
             : parsePair(key);
 
+        const heartbeatMs = feed.updateTriggersOverrides?.timeSinceLastUpdateInMilliseconds;
+        const deviation = feed.updateTriggersOverrides?.deviationPercentage;
+
         feeds[address] = {
           address,
           chainId,
           provider: "Redstone",
           description: feed.name || key,
           pair,
+          heartbeat: heartbeatMs ? Math.floor(heartbeatMs / 1000) : undefined,
+          deviationThreshold: deviation,
         };
       }
     }

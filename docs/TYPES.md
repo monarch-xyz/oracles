@@ -105,6 +105,8 @@ interface FeedInfo {
   heartbeat?: number;
   deviationThreshold?: number;
   tier?: string;
+  ens?: string;
+  feedType?: string;
 }
 ```
 
@@ -151,6 +153,8 @@ interface EnrichedFeed {
   tier?: string;
   heartbeat?: number;            // Update frequency in seconds (Chainlink, Redstone)
   deviationThreshold?: number;   // Deviation % trigger (Chainlink, Redstone)
+  ens?: string;                  // Chainlink ENS slug for feed page URL (e.g., "eth-usd")
+  feedType?: string;             // Redstone feed type: "fundamental" or "market"
 }
 
 interface OutputFile {

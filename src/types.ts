@@ -110,6 +110,8 @@ export interface FeedInfo {
   heartbeat?: number;
   deviationThreshold?: number;
   tier?: string; // Chainlink feed category: "verified", "monitored", "high", "medium", "low", "custom", etc.
+  ens?: string; // Chainlink ENS slug for feed URL (e.g., "eth-usd")
+  feedType?: string; // Redstone feed type: "fundamental" (asset vs underlying) or "market" (asset vs USD)
 }
 
 export interface FeedProviderRegistry {
@@ -179,6 +181,8 @@ export interface EnrichedFeed {
   tier?: string; // Feed tier/category (e.g., Chainlink's "verified", "high", etc.)
   heartbeat?: number; // Update frequency in seconds (Chainlink, Redstone)
   deviationThreshold?: number; // Deviation % trigger (Chainlink, Redstone)
+  ens?: string; // Chainlink ENS slug for building feed page URL (e.g., "eth-usd")
+  feedType?: string; // Redstone feed type: "fundamental" (asset vs underlying) or "market" (asset vs USD)
 }
 
 export interface OutputFile {

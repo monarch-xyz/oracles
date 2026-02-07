@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:reference-data-directory.vercel.app)"
+      "WebFetch(domain:reference-data-directory.vercel.app)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
