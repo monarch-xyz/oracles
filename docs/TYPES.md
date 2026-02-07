@@ -149,6 +149,8 @@ interface EnrichedFeed {
   provider: FeedProvider | null;
   decimals?: number;
   tier?: string;
+  heartbeat?: number;            // Update frequency in seconds (Chainlink, Redstone)
+  deviationThreshold?: number;   // Deviation % trigger (Chainlink, Redstone)
 }
 
 interface OutputFile {

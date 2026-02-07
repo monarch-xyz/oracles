@@ -177,6 +177,8 @@ export interface EnrichedFeed {
   provider: FeedProvider | null;
   decimals?: number;
   tier?: string; // Feed tier/category (e.g., Chainlink's "verified", "high", etc.)
+  heartbeat?: number; // Update frequency in seconds (Chainlink, Redstone)
+  deviationThreshold?: number; // Deviation % trigger (Chainlink, Redstone)
 }
 
 export interface OutputFile {

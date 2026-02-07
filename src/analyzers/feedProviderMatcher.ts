@@ -36,6 +36,8 @@ export class FeedProviderMatcher {
         provider: matched.provider,
         decimals: matched.decimals,
         tier: matched.tier,
+        heartbeat: matched.heartbeat,
+        deviationThreshold: matched.deviationThreshold,
       };
     }
 
