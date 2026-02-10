@@ -100,17 +100,13 @@ If standard classification fails:
 pnpm test tests/bytecode-real-input.test.ts
 ```
 
-3. If V2 requires updated mask from two valid deployments:
+3. If bytecode masks need regeneration from two valid deployments:
 
 ```bash
-pnpm run bytecode:mask:v2
+pnpm run bytecode:mask -- <bytecodeA|addressA> <bytecodeB|addressB> --chain <id> --const MORPHO_CHAINLINK_ORACLE_V2
 ```
 
-4. Paste output into `src/bytecodes/morpho-chainlink-oracle-v2-mask.ts`, or run:
-
-```bash
-pnpm run bytecode:mask:v2:write
-```
+4. Paste output into `src/bytecodes/oracle-bytecode-constants.ts`.
 
 5. Re-run full checks:
 

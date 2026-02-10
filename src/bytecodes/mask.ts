@@ -1,11 +1,14 @@
+import { asHexString, type HexString } from "./hex.js";
+
 /**
  * Applies a byte-index mask to a normalized hex bytecode string.
  * Each ignored byte index is replaced by 00.
  */
+
 export function applyIgnoredByteIndices(
-  normalizedBytecode: string,
+  normalizedBytecode: HexString,
   ignoredByteIndices: readonly number[],
-): string {
+): HexString {
   return applyByteMaskIndices(normalizedBytecode, ignoredByteIndices, "00");
 }
 
@@ -14,10 +17,10 @@ export function applyIgnoredByteIndices(
  * Each ignored byte index is replaced by the supplied byte value.
  */
 export function applyByteMaskIndices(
-  normalizedBytecode: string,
+  normalizedBytecode: HexString,
   ignoredByteIndices: readonly number[],
   maskByte: string,
-): string {
+): HexString {
   const hex = normalizedBytecode.startsWith("0x")
     ? normalizedBytecode.slice(2)
     : normalizedBytecode;
@@ -29,5 +32,5 @@ export function applyByteMaskIndices(
     }
   }
 
-  return `0x${bytes.join("")}`;
+  return asHexString(`0x${bytes.join("")}`);
 }

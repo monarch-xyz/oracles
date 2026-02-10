@@ -100,12 +100,18 @@ export type FeedProvider =
   | "Spectra"
   | "Unknown";
 
+export type PendleFeedKind = "LinearDiscount" | "ChainlinkOracle";
+export type PendleOracleType = "PT_TO_SY" | "PT_TO_ASSET" | "LP_TO_SY" | "LP_TO_ASSET";
+
 export interface FeedInfo {
   address: Address;
   chainId: ChainId;
   provider: FeedProvider;
   description: string;
   pair: [string, string] | null;
+  pendleFeedKind?: PendleFeedKind;
+  pendleOracleType?: PendleOracleType;
+  twapDuration?: number;
   baseDiscountPerYear?: string;
   innerOracle?: Address;
   pt?: Address;
@@ -181,6 +187,9 @@ export interface EnrichedFeed {
   description: string;
   pair: [string, string] | [];
   provider: FeedProvider | null;
+  pendleFeedKind?: PendleFeedKind;
+  pendleOracleType?: PendleOracleType;
+  twapDuration?: number;
   baseDiscountPerYear?: string;
   innerOracle?: Address;
   pt?: Address;

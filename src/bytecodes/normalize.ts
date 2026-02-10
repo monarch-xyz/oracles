@@ -1,8 +1,10 @@
+import { asHexString, type HexString } from "./hex.js";
+
 /**
  * Normalize bytecode by replacing PUSH32 (0x7f) values with zeros.
  * This allows comparing bytecode regardless of immutable values.
  */
-export function normalizeBytecode(bytecode: string): string {
+export function normalizeBytecode(bytecode: string): HexString {
   let hex = bytecode.toLowerCase();
   if (hex.startsWith("0x")) hex = hex.slice(2);
 
@@ -21,5 +23,5 @@ export function normalizeBytecode(bytecode: string): string {
     }
   }
 
-  return `0x${result}`;
+  return asHexString(`0x${result}`);
 }

@@ -1,20 +1,33 @@
-import { applyByteMaskIndices } from "../bytecodes/mask.js";
-import { normalizeBytecode } from "../bytecodes/normalize.js";
+import { isBytecodeMatch } from "../bytecodes/bytecodeMatch.js";
 import {
-  PENDLE_FEED_IGNORED_BYTE_INDICES,
-  PENDLE_FEED_MASKED_TARGET,
-} from "../bytecodes/pendle-linear-discount-feed-mask.js";
+  PENDLE_CHAINLINK_ORACLE_FEED_COMMON,
+  PENDLE_CHAINLINK_ORACLE_FEED_MASK,
+  PENDLE_LINEAR_DISCOUNT_ORACLE_FEED_COMMON,
+  PENDLE_LINEAR_DISCOUNT_ORACLE_FEED_MASK,
+} from "../bytecodes/oracle-bytecode-constants.js";
 
 /**
  * Bytecode check for Pendle linear discount feed wrappers.
- * Normalizes deployed bytecode (masks PUSH32 immutables) and compares.
  */
-export function isPendleLinearDiscountOracleWrapper(deployedBytecode: string): boolean {
-  const normalizedDeployed = normalizeBytecode(deployedBytecode);
-  const maskedDeployed = applyByteMaskIndices(
-    normalizedDeployed,
-    PENDLE_FEED_IGNORED_BYTE_INDICES,
-    "ff",
+export function isPendleLinearDiscountFeedBytecode(deployedBytecode: string): boolean {
+  return isBytecodeMatch(
+    deployedBytecode,
+    PENDLE_LINEAR_DISCOUNT_ORACLE_FEED_MASK,
+    PENDLE_LINEAR_DISCOUNT_ORACLE_FEED_COMMON,
   );
-  return maskedDeployed === PENDLE_FEED_MASKED_TARGET;
 }
+
+/**
+ * Bytecode check for Pendle Chainlink oracle feeds.
+ */
+export function isPendleChainlinkOracleFeedBytecode(deployedBytecode: string): boolean {
+  return isBytecodeMatch(
+    deployedBytecode,
+    PENDLE_CHAINLINK_ORACLE_FEED_MASK,
+    PENDLE_CHAINLINK_ORACLE_FEED_COMMON,
+  );
+}
+
+// Backwards-compatible aliases
+export const isPendleLinearDiscountOracleWrapper = isPendleLinearDiscountFeedBytecode;
+export const isPendleChainlinkOracleFeed = isPendleChainlinkOracleFeedBytecode;

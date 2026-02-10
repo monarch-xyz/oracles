@@ -101,6 +101,9 @@ interface FeedInfo {
   provider: FeedProvider;
   description: string;
   pair: [string, string] | null;
+  pendleFeedKind?: "LinearDiscount" | "ChainlinkOracle";
+  pendleOracleType?: "PT_TO_SY" | "PT_TO_ASSET" | "LP_TO_SY" | "LP_TO_ASSET";
+  twapDuration?: number;
   baseDiscountPerYear?: string;
   innerOracle?: Address;
   pt?: Address;
@@ -153,6 +156,9 @@ interface EnrichedFeed {
   description: string;
   pair: [string, string] | [];
   provider: FeedProvider | null;
+  pendleFeedKind?: "LinearDiscount" | "ChainlinkOracle";
+  pendleOracleType?: "PT_TO_SY" | "PT_TO_ASSET" | "LP_TO_SY" | "LP_TO_ASSET";
+  twapDuration?: number;
   baseDiscountPerYear?: string;
   innerOracle?: Address;
   pt?: Address;
@@ -213,9 +219,8 @@ Update real bytecode constants in `tests/bytecode-real-input.test.ts`:
 - `REAL_V2_BYTECODE`
 - `REAL_V2_BYTECODE_2`
 
-Use these commands when updating V2 masking:
+Use this command when updating bytecode masks:
 
 ```bash
-pnpm run bytecode:mask:v2
-pnpm run bytecode:mask:v2:write
+pnpm run bytecode:mask -- <bytecodeA|addressA> <bytecodeB|addressB> --chain <id> --const MORPHO_CHAINLINK_ORACLE_V2
 ```

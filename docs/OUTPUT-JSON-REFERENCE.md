@@ -91,6 +91,9 @@ Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
 | `deviationThreshold` | `number` | optional | Price deviation percentage that triggers an update. E.g. `0.5` = a 0.5% price move triggers an update. Present for Chainlink and Redstone feeds. |
 | `ens` | `string` | optional | Chainlink ENS slug for building the feed page URL. E.g. `"eth-usd"` → `https://data.chain.link/feeds/ethereum/mainnet/eth-usd`. Only present for Chainlink feeds. |
 | `feedType` | `string` | optional | Redstone feed pricing type. `"fundamental"` = asset priced vs its underlying (e.g. wstETH vs ETH). `"market"` = asset priced vs USD. Only present for Redstone feeds. |
+| `pendleFeedKind` | `string` | optional | Pendle feed variant: `"LinearDiscount"` or `"ChainlinkOracle"`. |
+| `pendleOracleType` | `string` | optional | Pendle Chainlink oracle pricing direction: `"PT_TO_SY"`, `"PT_TO_ASSET"`, `"LP_TO_SY"`, `"LP_TO_ASSET"`. |
+| `twapDuration` | `number` | optional | Pendle Chainlink oracle TWAP window, in seconds. |
 | `baseDiscountPerYear` | `string` | optional | Pendle feed parameter returned from the inner oracle. |
 | `innerOracle` | `string` | optional | Pendle inner oracle address. |
 | `pt` | `string` | optional | Pendle PT token address. |

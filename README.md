@@ -66,8 +66,7 @@ pnpm run scan
 - `pnpm run typecheck`: TypeScript no-emit check
 - `pnpm run lint`: biome checks
 - `pnpm run test`: run tests
-- `pnpm run bytecode:mask:v2`: generate pasteable V2 mask constants from real test inputs
-- `pnpm run bytecode:mask:v2:write`: same as above, but writes directly to `src/bytecodes/morpho-chainlink-oracle-v2-mask.ts`
+- `pnpm run bytecode:mask`: generate COMMON + MASK constants from two bytecodes or addresses
 
 ## Real Bytecode Validation Workflow
 
@@ -84,18 +83,13 @@ This is the place to validate against real deployed bytecode, not only reference
 pnpm test tests/bytecode-real-input.test.ts
 ```
 
-4. If two valid V2 bytecodes differ because of runtime immutables, regenerate the mask:
+4. If two valid bytecodes differ because of runtime immutables, regenerate the mask/common:
 
 ```bash
-pnpm run bytecode:mask:v2
+pnpm run bytecode:mask -- <bytecodeA|addressA> <bytecodeB|addressB> --chain <id> --const MORPHO_CHAINLINK_ORACLE_V2
 ```
 
-5. Paste the printed output into `src/bytecodes/morpho-chainlink-oracle-v2-mask.ts`.
-   Alternatively:
-
-```bash
-pnpm run bytecode:mask:v2:write
-```
+5. Paste the printed output into `src/bytecodes/oracle-bytecode-constants.ts`.
 
 6. Re-run tests:
 

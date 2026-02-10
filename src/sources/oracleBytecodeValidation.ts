@@ -1,7 +1,7 @@
 import type { Address, ChainId } from "../types.js";
 import { getClient } from "./morphoFactory.js";
-import { isMorphoChainlinkOracleV1BytecodeBytes } from "./oracleV1Detector.js";
-import { isMorphoChainlinkOracleV2BytecodeBytes } from "./oracleV2BytecodeDetector.js";
+import { isMorphoChainlinkOracleV1Bytecode } from "./oracleV1Detector.js";
+import { isMorphoChainlinkOracleV2Bytecode } from "./oracleV2BytecodeDetector.js";
 
 export type OracleBytecodeKind = "v1" | "v2" | "unknown";
 
@@ -31,10 +31,10 @@ export async function fetchOracleBytecode(
  * Pure bytecode classification (no RPC calls).
  */
 export function classifyOracleBytecode(deployedBytecode: string): OracleBytecodeKind {
-  if (isMorphoChainlinkOracleV1BytecodeBytes(deployedBytecode)) {
+  if (isMorphoChainlinkOracleV1Bytecode(deployedBytecode)) {
     return "v1";
   }
-  if (isMorphoChainlinkOracleV2BytecodeBytes(deployedBytecode)) {
+  if (isMorphoChainlinkOracleV2Bytecode(deployedBytecode)) {
     return "v2";
   }
   return "unknown";

@@ -9,8 +9,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "bytecode:mask:v2": "node scripts/generate-v2-bytecode-mask.cjs",
-    "bytecode:mask:v2:write": "node scripts/generate-v2-bytecode-mask.cjs --write",
+    "bytecode:mask": "tsx scripts/generate-mask.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

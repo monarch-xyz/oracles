@@ -1,11 +1,17 @@
-import { MORPHO_V1_NORMALIZED_BYTECODE } from "../bytecodes/morpho-chainlink-oracle-v1.js";
-import { normalizeBytecode } from "../bytecodes/normalize.js";
+import { isBytecodeMatch } from "../bytecodes/bytecodeMatch.js";
+import {
+  MORPHO_CHAINLINK_ORACLE_V1_COMMON,
+  MORPHO_CHAINLINK_ORACLE_V1_MASK,
+} from "../bytecodes/oracle-bytecode-constants.js";
 
 /**
  * Pure bytecode check for MorphoChainlinkOracle V1.
  * Normalizes deployed bytecode (masks PUSH32 immutables) and compares.
  */
-export function isMorphoChainlinkOracleV1BytecodeBytes(deployedBytecode: string): boolean {
-  const normalizedDeployed = normalizeBytecode(deployedBytecode);
-  return normalizedDeployed === MORPHO_V1_NORMALIZED_BYTECODE;
+export function isMorphoChainlinkOracleV1Bytecode(deployedBytecode: string): boolean {
+  return isBytecodeMatch(
+    deployedBytecode,
+    MORPHO_CHAINLINK_ORACLE_V1_MASK,
+    MORPHO_CHAINLINK_ORACLE_V1_COMMON,
+  );
 }
