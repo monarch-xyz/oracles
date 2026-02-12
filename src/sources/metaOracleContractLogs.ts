@@ -1,6 +1,6 @@
-import { decodeEventLog, encodeEventTopics } from "viem";
+import { decodeEventLog, encodeEventTopics, type Hex } from "viem";
 import { CHAIN_CONFIGS } from "../config.js";
-import type { Address, ChainId, MetaOracleDeviationTimelockConfig } from "../types";
+import type { Address, ChainId, MetaOracleDeviationTimelockConfig } from "../types.js";
 import { fetchEtherscanLogs } from "./etherscanLogs.js";
 
 const META_ORACLE_DEPLOYED_EVENT = {
@@ -32,7 +32,10 @@ function toNullableAddress(address: Address): Address | null {
 export async function fetchMetaOraclesFromLogs(
   chainId: ChainId,
 ): Promise<Map<Address, MetaOracleDeviationTimelockConfig>> {
-  const config = CHAIN_CONFIGS[chainId];
+  const config = CHAIN_CONFIGS[chainId as keyof typeof CHAIN_CONFIGS];
+  if (!config) {
+    return new Map<Address, MetaOracleDeviationTimelockConfig>();
+  }
   const factories = config.metaOracleDeviationTimelockFactories;
   const results = new Map<Address, MetaOracleDeviationTimelockConfig>();
 
@@ -50,16 +53,16 @@ export async function fetchMetaOraclesFromLogs(
       address: factory.toLowerCase() as Address,
       fromBlock: 0,
       toBlock: "latest",
-      offset: 0,
       topic0: META_ORACLE_EVENT_TOPIC,
     });
 
     for (const log of logs) {
       try {
+        const topics = log.topics as Hex[];
         const decoded = decodeEventLog({
           abi: META_ORACLE_EVENT_ABI,
-          data: log.data,
-          topics: log.topics as readonly string[],
+          data: log.data as Hex,
+          topics: topics.length ? (topics as [Hex, ...Hex[]]) : [],
           strict: false,
         });
 

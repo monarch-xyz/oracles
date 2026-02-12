@@ -299,6 +299,9 @@ async function bootstrapMetaOracles(
 
   const metaAddresses = Array.from(configsFromLogs.keys());
   const expanded = new Set<Address>(oracleAddresses);
+  for (const metaAddress of metaAddresses) {
+    expanded.add(metaAddress);
+  }
   const mergedConfigs = new Map<Address, MetaOracleDeviationTimelockConfig>(configsFromLogs);
 
   for (const config of configsFromLogs.values()) {

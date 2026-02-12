@@ -34,7 +34,7 @@ export async function fetchEtherscanLogs(
     fromBlock: options.fromBlock.toString(),
     toBlock: options.toBlock.toString(),
     page: (options.page ?? 1).toString(),
-    offset: (options.offset ?? 0).toString(),
+    offset: (options.offset ?? 10000).toString(),
     apikey: ETHERSCAN_API_KEY,
   });
 
