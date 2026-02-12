@@ -1,8 +1,6 @@
 import { isBytecodeMatch } from "../bytecodes/bytecodeMatch.js";
 import {
   MORPHO_CHAINLINK_ORACLE_V2_COMMON,
-  MORPHO_CHAINLINK_ORACLE_V2_HYPEREVM_COMMON,
-  MORPHO_CHAINLINK_ORACLE_V2_HYPEREVM_MASK,
   MORPHO_CHAINLINK_ORACLE_V2_MASK,
 } from "../bytecodes/oracle-bytecode-constants.js";
 
@@ -16,11 +14,6 @@ export function isMorphoChainlinkOracleV2Bytecode(deployedBytecode: string): boo
       deployedBytecode,
       MORPHO_CHAINLINK_ORACLE_V2_MASK,
       MORPHO_CHAINLINK_ORACLE_V2_COMMON,
-    ) ||
-    isBytecodeMatch(
-      deployedBytecode,
-      MORPHO_CHAINLINK_ORACLE_V2_HYPEREVM_MASK,
-      MORPHO_CHAINLINK_ORACLE_V2_HYPEREVM_COMMON,
     )
   );
 }

@@ -68,6 +68,15 @@ pnpm run scan
 - `pnpm run test`: run tests
 - `pnpm run bytecode:mask`: generate COMMON + MASK constants from two bytecodes or addresses
 
+## Classification Refresh Behavior
+
+The scanner only reclassifies oracles when they are new, unclassified, or when
+`--force-rescan` / `--force-reclassify` is provided. That means a previously
+recognized standard oracle will not automatically downgrade to `unknown` unless
+you force a rescan. The one exception is proxy contracts: if an implementation
+changes, the scanner will re-run custom adapter matching and set the
+classification to `Unknown` when no match is found.
+
 ## Real Bytecode Validation Workflow
 
 This is the place to validate against real deployed bytecode, not only reference constants.
