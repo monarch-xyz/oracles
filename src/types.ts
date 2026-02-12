@@ -62,6 +62,12 @@ export type OracleClassification =
       feeds: StandardOracleFeeds;
     }
   | {
+      kind: "MetaOracleDeviationTimelock";
+      verificationMethod: "factory";
+      config: MetaOracleDeviationTimelockConfig;
+      oracleSources?: MetaOracleSources;
+    }
+  | {
       kind: "CustomAdapter";
       adapterId: string;
       adapterName: string;
@@ -82,6 +88,15 @@ export interface StandardOracleFeeds {
   quoteVault: Address | null;
   baseVaultConversionSample: bigint;
   quoteVaultConversionSample: bigint;
+}
+
+export interface MetaOracleDeviationTimelockConfig {
+  primaryOracle: Address | null;
+  backupOracle: Address | null;
+  currentOracle: Address | null;
+  deviationThreshold: string;
+  challengeTimelockDuration: number;
+  healingTimelockDuration: number;
 }
 
 // ============================================================================
@@ -156,6 +171,10 @@ export type OracleOutput =
       data: StandardOracleOutputData;
     })
   | (OracleOutputBase & {
+      type: "meta";
+      data: MetaOracleOutputData;
+    })
+  | (OracleOutputBase & {
       type: "custom";
       data: CustomOracleOutputData;
     })
@@ -169,6 +188,26 @@ export interface StandardOracleOutputData {
   baseFeedTwo: EnrichedFeed | null;
   quoteFeedOne: EnrichedFeed | null;
   quoteFeedTwo: EnrichedFeed | null;
+}
+
+export interface MetaOracleSources {
+  primary: StandardOracleFeeds | null;
+  backup: StandardOracleFeeds | null;
+}
+
+export interface MetaOracleOutputData {
+  primaryOracle: Address | null;
+  backupOracle: Address | null;
+  currentOracle: Address | null;
+  deviationThreshold: string;
+  challengeTimelockDuration: number;
+  healingTimelockDuration: number;
+  oracleSources?: MetaOracleOutputSources;
+}
+
+export interface MetaOracleOutputSources {
+  primary: StandardOracleOutputData | null;
+  backup: StandardOracleOutputData | null;
 }
 
 export interface CustomOracleOutputData {
@@ -218,6 +257,7 @@ export interface MetadataFile {
     {
       oracleCount: number;
       standardCount: number;
+      metaCount: number;
       customCount: number;
       unknownCount: number;
       upgradableCount: number;

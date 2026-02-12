@@ -44,7 +44,7 @@ Every oracle entry has a shared base plus a `type` discriminator with type-speci
 | `isUpgradable` | `boolean` | `true` if the contract is behind a proxy |
 | `proxy` | `object` | Proxy details (see below) |
 | `lastScannedAt` | `string` | ISO-8601 timestamp of the last scan that processed this oracle |
-| `type` | `"standard" \| "custom" \| "unknown"` | Discriminator for the `data` shape |
+| `type` | `"standard" \| "meta" \| "custom" \| "unknown"` | Discriminator for the `data` shape |
 | `data` | `object` | Type-specific data (see below) |
 
 #### `proxy` object
@@ -100,6 +100,34 @@ Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
 | `ptSymbol` | `string` | optional | Pendle PT token symbol. |
 
 **Provider values:** `"Chainlink"`, `"Redstone"`, `"Chronicle"`, `"Pyth"`, `"Oval"`, `"Lido"`, `"Compound"`, `"Pendle"`, `"Spectra"`, `"Unknown"`
+
+---
+
+### Type: `"meta"`
+
+MetaOracleDeviationTimelock (combines primary + backup oracle sources with timelocks).
+
+```jsonc
+{
+  // ...base fields...
+  "type": "meta",
+  "data": {
+    "primaryOracle": "0x...",                 // Primary oracle address
+    "backupOracle": "0x...",                  // Backup oracle address
+    "currentOracle": "0x...",                 // Active oracle address
+    "deviationThreshold": "10000000000000000", // Scaled by 1e18 (e.g., 1% = 0.01e18)
+    "challengeTimelockDuration": 3600,        // Seconds
+    "healingTimelockDuration": 86400,         // Seconds
+    "oracleSources": {
+      "primary": { /* StandardOracleOutputData | null */ },
+      "backup": { /* StandardOracleOutputData | null */ }
+    }
+  }
+}
+```
+
+`oracleSources` mirrors the standard `data` shape, but nested under `primary` and `backup` to
+show the oracle hierarchy and make it easy for the frontend to render both paths.
 
 ---
 
@@ -162,6 +190,7 @@ Aggregate metadata across all chains, useful for dashboards and summaries.
     "1": {
       "oracleCount": 42,            // Total oracles on this chain
       "standardCount": 35,          // type: "standard"
+      "metaCount": 2,               // type: "meta"
       "customCount": 5,             // type: "custom"
       "unknownCount": 2,            // type: "unknown"
       "upgradableCount": 8          // isUpgradable: true
