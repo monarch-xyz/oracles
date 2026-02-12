@@ -188,6 +188,8 @@ export interface StandardOracleOutputData {
   baseFeedTwo: EnrichedFeed | null;
   quoteFeedOne: EnrichedFeed | null;
   quoteFeedTwo: EnrichedFeed | null;
+  baseVault: EnrichedVault | null;
+  quoteVault: EnrichedVault | null;
 }
 
 export interface MetaOracleSources {
@@ -239,6 +241,19 @@ export interface EnrichedFeed {
   deviationThreshold?: number; // Deviation % trigger (Chainlink, Redstone)
   ens?: string; // Chainlink ENS slug for building feed page URL (e.g., "eth-usd")
   feedType?: string; // Redstone feed type: "fundamental" (asset vs underlying) or "market" (asset vs USD)
+}
+
+/**
+ * Enriched ERC4626 vault info for oracle price conversion.
+ * Vaults convert share tokens to underlying assets using convertToAssets().
+ */
+export interface EnrichedVault {
+  address: Address;
+  symbol: string; // Vault share token symbol (e.g., "wstETH")
+  asset: Address; // Underlying asset address
+  assetSymbol: string; // Underlying asset symbol (e.g., "stETH")
+  pair: [string, string]; // [symbol, assetSymbol] - the conversion pair
+  conversionSample: string; // Sample amount used for conversion (bigint as string)
 }
 
 export interface OutputFile {

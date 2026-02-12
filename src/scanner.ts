@@ -21,6 +21,7 @@ import { fetchMetaOraclesFromLogs } from "./sources/metaOracleContractLogs.js";
 import { validateOraclesByBytecodeOneByOne } from "./sources/oracleBytecodeValidation.js";
 import { fetchV1OracleFeedsBatch, fetchV2OracleFeedsBatch } from "./sources/oracleFeedFetcher.js";
 import { fetchRedstoneProvider } from "./sources/redstone.js";
+import { enrichVaults, lookupVault } from "./sources/vaultEnricher.js";
 import { getChainState, loadState, saveToGist } from "./state/store.js";
 import type {
   Address,
@@ -28,6 +29,7 @@ import type {
   ChainState,
   ContractState,
   CustomOracleOutputData,
+  EnrichedVault,
   MetaOracleDeviationTimelockConfig,
   MetadataFile,
   MetaOracleSources,
@@ -223,7 +225,14 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     // Rescan upgradable oracles (24h check)
     await rescanUpgradableOracles(chainId, chainState, forceRescan);
 
-    const output = buildOutputFile(chainId, chainState, feedProviderMatcher);
+    // Enrich vault metadata for all standard oracles
+    const allFeeds = collectAllStandardFeeds(chainState);
+    const vaultMap = await enrichVaults(chainId, allFeeds);
+    if (vaultMap.size > 0) {
+      console.log(`  [vault] Enriched ${vaultMap.size} vaults`);
+    }
+
+    const output = buildOutputFile(chainId, chainState, feedProviderMatcher, vaultMap);
     outputs.set(chainId, output);
   }
 
@@ -286,6 +295,33 @@ function collectStandardOracleFeedAddresses(
   }
 
   return feedAddresses;
+}
+
+/**
+ * Collect all StandardOracleFeeds from the chain state for vault enrichment.
+ */
+function collectAllStandardFeeds(chainState: ChainState): StandardOracleFeeds[] {
+  const feeds: StandardOracleFeeds[] = [];
+
+  for (const contract of Object.values(chainState.contracts)) {
+    const classification = contract?.classification;
+    if (!classification) continue;
+
+    if (
+      classification.kind === "MorphoChainlinkOracleV1" ||
+      classification.kind === "MorphoChainlinkOracleV2"
+    ) {
+      feeds.push(classification.feeds);
+    }
+
+    if (classification.kind === "MetaOracleDeviationTimelock") {
+      const metaSources = classification.oracleSources;
+      if (metaSources?.primary) feeds.push(metaSources.primary);
+      if (metaSources?.backup) feeds.push(metaSources.backup);
+    }
+  }
+
+  return feeds;
 }
 
 async function bootstrapMetaOracles(
@@ -671,11 +707,12 @@ function buildOutputFile(
   chainId: ChainId,
   chainState: ChainState,
   feedProviderMatcher: FeedProviderMatcher,
+  vaultMap: Map<Address, EnrichedVault>,
 ): OutputFile {
   const oracles: OracleOutput[] = [];
 
   for (const [address, contract] of Object.entries(chainState.contracts)) {
-    const oracle = buildOracleOutput(address as Address, chainId, contract, feedProviderMatcher);
+    const oracle = buildOracleOutput(address as Address, chainId, contract, feedProviderMatcher, vaultMap);
     oracles.push(oracle);
   }
 
@@ -694,6 +731,7 @@ function buildOracleOutput(
   chainId: ChainId,
   contract: ContractState,
   feedProviderMatcher: FeedProviderMatcher,
+  vaultMap: Map<Address, EnrichedVault>,
 ): OracleOutput {
   const classification = contract.classification;
   const proxyInfo = asProxyInfo(contract.proxy);
@@ -725,6 +763,8 @@ function buildOracleOutput(
         baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
         quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
         quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
+        baseVault: lookupVault(vaultMap, feeds.baseVault),
+        quoteVault: lookupVault(vaultMap, feeds.quoteVault),
       },
     };
   }
@@ -740,6 +780,8 @@ function buildOracleOutput(
         baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
         quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
         quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
+        baseVault: lookupVault(vaultMap, feeds.baseVault),
+        quoteVault: lookupVault(vaultMap, feeds.quoteVault),
       },
     };
   }
@@ -750,10 +792,10 @@ function buildOracleOutput(
     const enrichedSources = sources
       ? {
           primary: sources.primary
-            ? enrichStandardFeeds(sources.primary, chainId, feedProviderMatcher)
+            ? enrichStandardFeeds(sources.primary, chainId, feedProviderMatcher, vaultMap)
             : null,
           backup: sources.backup
-            ? enrichStandardFeeds(sources.backup, chainId, feedProviderMatcher)
+            ? enrichStandardFeeds(sources.backup, chainId, feedProviderMatcher, vaultMap)
             : null,
         }
       : undefined;
@@ -805,12 +847,15 @@ function enrichStandardFeeds(
   feeds: StandardOracleFeeds,
   chainId: ChainId,
   feedProviderMatcher: FeedProviderMatcher,
+  vaultMap: Map<Address, EnrichedVault>,
 ): StandardOracleOutputData {
   return {
     baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
     baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
     quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
     quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
+    baseVault: lookupVault(vaultMap, feeds.baseVault),
+    quoteVault: lookupVault(vaultMap, feeds.quoteVault),
   };
 }
 

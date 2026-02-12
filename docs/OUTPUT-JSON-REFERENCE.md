@@ -60,7 +60,7 @@ Every oracle entry has a shared base plus a `type` discriminator with type-speci
 
 ### Type: `"standard"`
 
-Standard Morpho Chainlink Oracle (V1 or V2). Has up to 4 price feed slots.
+Standard Morpho Chainlink Oracle (V1 or V2). Has up to 4 price feed slots and 2 vault slots.
 
 ```jsonc
 {
@@ -70,12 +70,15 @@ Standard Morpho Chainlink Oracle (V1 or V2). Has up to 4 price feed slots.
     "baseFeedOne":  /* EnrichedFeed | null */,
     "baseFeedTwo":  /* EnrichedFeed | null */,
     "quoteFeedOne": /* EnrichedFeed | null */,
-    "quoteFeedTwo": /* EnrichedFeed | null */
+    "quoteFeedTwo": /* EnrichedFeed | null */,
+    "baseVault":    /* EnrichedVault | null */,
+    "quoteVault":   /* EnrichedVault | null */
   }
 }
 ```
 
 Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
+Each vault slot is either `null` (unused) or an `EnrichedVault` object.
 
 #### `EnrichedFeed`
 
@@ -100,6 +103,31 @@ Each feed slot is either `null` (unused) or an `EnrichedFeed` object.
 | `ptSymbol` | `string` | optional | Pendle PT token symbol. |
 
 **Provider values:** `"Chainlink"`, `"Redstone"`, `"Chronicle"`, `"Pyth"`, `"Oval"`, `"Lido"`, `"Compound"`, `"Pendle"`, `"Spectra"`, `"Unknown"`
+
+#### `EnrichedVault`
+
+ERC4626 vaults convert share tokens to underlying assets. Used when oracles price vault tokens (e.g., pufETH → WETH, wstETH → stETH).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `address` | `"0x..."` | always | Vault contract address |
+| `symbol` | `string` | always | Vault share token symbol (e.g., `"pufETH"`, `"wstETH"`) |
+| `asset` | `"0x..."` | always | Underlying asset address |
+| `assetSymbol` | `string` | always | Underlying asset symbol (e.g., `"WETH"`, `"stETH"`) |
+| `pair` | `[string, string]` | always | Conversion pair: `[symbol, assetSymbol]`. E.g., `["pufETH", "WETH"]` |
+| `conversionSample` | `string` | always | Sample amount used for conversion (bigint as string). Typically `"1000000000000000000"` (1e18). |
+
+**Example:**
+```jsonc
+{
+  "address": "0xd9a442856c234a39a81a089c06451ebaa4306a72",
+  "symbol": "pufETH",
+  "asset": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  "assetSymbol": "WETH",
+  "pair": ["pufETH", "WETH"],
+  "conversionSample": "1000000000000000000"
+}
+```
 
 ---
 
