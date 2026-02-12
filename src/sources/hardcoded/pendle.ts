@@ -97,8 +97,11 @@ async function fetchPendleAssetSymbol(
       console.log(`[pendle] No API data for ${ptAddress} (chain ${chainId}): ${response.status}`);
       return null;
     }
-    const payload = (await response.json()) as { symbol?: string } | { data?: { symbol?: string } };
-    const symbol = "data" in payload ? payload.data?.symbol : payload.symbol;
+    const payload = (await response.json()) as {
+      symbol?: string;
+      data?: { symbol?: string };
+    };
+    const symbol = payload.data?.symbol ?? payload.symbol;
     return symbol?.trim() || null;
   } catch (error) {
     console.log(`[pendle] API error for ${ptAddress} (chain ${chainId}): ${error}`);
@@ -234,7 +237,8 @@ async function fetchPendleChainlinkFeedInfo(
       quoteSymbol = isSyQuoteOracleType(oracleType) ? `SY-${underlying}` : underlying;
     }
 
-    const pair = baseSymbol && quoteSymbol ? [baseSymbol, quoteSymbol] : null;
+    const pair: [string, string] | null =
+      baseSymbol && quoteSymbol ? [baseSymbol, quoteSymbol] : null;
     const description = pair ? `Pendle ${pair[0]} / ${pair[1]}` : "Pendle Chainlink Oracle";
 
     return {
