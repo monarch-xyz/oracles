@@ -51,6 +51,12 @@ type OracleClassification =
       feeds: StandardOracleFeeds;
     }
   | {
+      kind: "MetaOracleDeviationTimelock";
+      verificationMethod: "factory";
+      config: MetaOracleDeviationTimelockConfig;
+      oracleSources?: MetaOracleSources;
+    }
+  | {
       kind: "CustomAdapter";
       adapterId: string;
       adapterName: string;
@@ -75,6 +81,20 @@ interface StandardOracleFeeds {
   quoteVault: Address | null;
   baseVaultConversionSample: bigint;
   quoteVaultConversionSample: bigint;
+}
+
+interface MetaOracleDeviationTimelockConfig {
+  primaryOracle: Address | null;
+  backupOracle: Address | null;
+  currentOracle: Address | null;
+  deviationThreshold: string;
+  challengeTimelockDuration: number;
+  healingTimelockDuration: number;
+}
+
+interface MetaOracleSources {
+  primary: StandardOracleFeeds | null;
+  backup: StandardOracleFeeds | null;
 }
 ```
 
@@ -139,6 +159,7 @@ interface OracleOutputBase {
 
 type OracleOutput =
   | (OracleOutputBase & { type: "standard"; data: StandardOracleOutputData })
+  | (OracleOutputBase & { type: "meta"; data: MetaOracleOutputData })
   | (OracleOutputBase & { type: "custom"; data: CustomOracleOutputData })
   | (OracleOutputBase & { type: "unknown"; data: UnknownOracleOutputData });
 
@@ -147,6 +168,21 @@ interface StandardOracleOutputData {
   baseFeedTwo: EnrichedFeed | null;
   quoteFeedOne: EnrichedFeed | null;
   quoteFeedTwo: EnrichedFeed | null;
+}
+
+interface MetaOracleOutputData {
+  primaryOracle: Address | null;
+  backupOracle: Address | null;
+  currentOracle: Address | null;
+  deviationThreshold: string;
+  challengeTimelockDuration: number;
+  healingTimelockDuration: number;
+  oracleSources?: MetaOracleOutputSources;
+}
+
+interface MetaOracleOutputSources {
+  primary: StandardOracleOutputData | null;
+  backup: StandardOracleOutputData | null;
 }
 ```
 

@@ -16,6 +16,8 @@ import {
   fetchPythProvider,
 } from "./sources/hardcoded/index.js";
 import { fetchOraclesFromMorphoApi } from "./sources/morphoApi.js";
+import { fetchMetaOracleDeviationTimelockConfigs } from "./sources/metaOracleDeviationTimelock.js";
+import { fetchMetaOraclesFromLogs } from "./sources/metaOracleContractLogs.js";
 import { validateOraclesByBytecodeOneByOne } from "./sources/oracleBytecodeValidation.js";
 import { fetchV1OracleFeedsBatch, fetchV2OracleFeedsBatch } from "./sources/oracleFeedFetcher.js";
 import { fetchRedstoneProvider } from "./sources/redstone.js";
@@ -26,7 +28,9 @@ import type {
   ChainState,
   ContractState,
   CustomOracleOutputData,
+  MetaOracleDeviationTimelockConfig,
   MetadataFile,
+  MetaOracleSources,
   OracleClassification,
   OracleOutput,
   OutputFile,
@@ -50,6 +54,11 @@ function asProxyInfo(proxy: ContractState["proxy"]): ProxyInfo | null {
 
 export interface RunScannerOptions {
   forceRescan?: boolean;
+}
+
+interface MetaOracleBootstrapResult {
+  addresses: Address[];
+  configs: Map<Address, MetaOracleDeviationTimelockConfig>;
 }
 
 export async function runScanner(options: RunScannerOptions = {}): Promise<void> {
@@ -89,7 +98,10 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     ]);
 
     const chainState = getChainState(state, chainId);
-    const oracleAddresses = oraclesByChain.get(chainId) || [];
+    const baseOracleAddresses = oraclesByChain.get(chainId) || [];
+    const metaBootstrap = await bootstrapMetaOracles(chainId, baseOracleAddresses);
+    const oracleAddresses = metaBootstrap.addresses;
+    const metaConfigs = metaBootstrap.configs;
 
     // Load hardcoded providers
     const compoundProvider = fetchCompoundProvider(chainId);
@@ -117,7 +129,12 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     const newAddresses = new Set<Address>();
     let cachedClassificationCount = 0;
 
-    console.log(`  Found ${oracleAddresses.length} oracles from Morpho API`);
+    console.log(`  Found ${baseOracleAddresses.length} oracles from Morpho API`);
+    if (oracleAddresses.length !== baseOracleAddresses.length) {
+      console.log(
+        `  [meta] expanded oracle list to ${oracleAddresses.length} after including meta oracles`,
+      );
+    }
 
     for (const oracleAddress of oracleAddresses) {
       let contractState = chainState.contracts[oracleAddress];
@@ -143,7 +160,10 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
 
       // Classification (factory + bytecode) is deterministic for immutable bytecode.
       // Re-run only for new/unclassified contracts, or on explicit force rescan.
-      const needsClassification = forceRescan || !contractState.classification;
+      // Meta oracles must be re-classified every run to keep their config fresh.
+      const isMetaAddress = metaConfigs.has(oracleAddress);
+      const needsClassification =
+        forceRescan || !contractState.classification || isMetaAddress;
 
       if (needsClassification) {
         classificationTargets.push(oracleAddress);
@@ -156,9 +176,18 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
       `  [classification] targets=${classificationTargets.length}, cached=${cachedClassificationCount}`,
     );
 
+    const cachedClassifications = new Map<Address, OracleClassification>();
+    for (const [address, contract] of Object.entries(chainState.contracts)) {
+      if (contract.classification) {
+        cachedClassifications.set(address as Address, contract.classification);
+      }
+    }
+
     const resolvedClassifications = await resolveStandardClassifications(
       chainId,
       classificationTargets,
+      metaConfigs,
+      cachedClassifications,
     );
     const classificationTargetSet = new Set(classificationTargets);
     let standardSkippedProxyScanCount = 0;
@@ -219,19 +248,81 @@ function collectStandardOracleFeedAddresses(
     const classification = contract?.classification;
     if (!classification) continue;
 
-    const isStandard =
-      classification.kind === "MorphoChainlinkOracleV1" ||
-      classification.kind === "MorphoChainlinkOracleV2";
-    if (!isStandard) continue;
+    if (classification.kind === "MorphoChainlinkOracleV1") {
+      const feeds = classification.feeds;
+      if (feeds.baseFeedOne) feedAddresses.push(feeds.baseFeedOne);
+      if (feeds.baseFeedTwo) feedAddresses.push(feeds.baseFeedTwo);
+      if (feeds.quoteFeedOne) feedAddresses.push(feeds.quoteFeedOne);
+      if (feeds.quoteFeedTwo) feedAddresses.push(feeds.quoteFeedTwo);
+      continue;
+    }
 
-    const feeds = classification.feeds;
-    if (feeds.baseFeedOne) feedAddresses.push(feeds.baseFeedOne);
-    if (feeds.baseFeedTwo) feedAddresses.push(feeds.baseFeedTwo);
-    if (feeds.quoteFeedOne) feedAddresses.push(feeds.quoteFeedOne);
-    if (feeds.quoteFeedTwo) feedAddresses.push(feeds.quoteFeedTwo);
+    if (classification.kind === "MorphoChainlinkOracleV2") {
+      const feeds = classification.feeds;
+      if (feeds.baseFeedOne) feedAddresses.push(feeds.baseFeedOne);
+      if (feeds.baseFeedTwo) feedAddresses.push(feeds.baseFeedTwo);
+      if (feeds.quoteFeedOne) feedAddresses.push(feeds.quoteFeedOne);
+      if (feeds.quoteFeedTwo) feedAddresses.push(feeds.quoteFeedTwo);
+      continue;
+    }
+
+    if (classification.kind === "MetaOracleDeviationTimelock") {
+      const metaSources = classification.oracleSources;
+      if (metaSources?.primary) {
+        const feeds = metaSources.primary;
+        if (feeds.baseFeedOne) feedAddresses.push(feeds.baseFeedOne);
+        if (feeds.baseFeedTwo) feedAddresses.push(feeds.baseFeedTwo);
+        if (feeds.quoteFeedOne) feedAddresses.push(feeds.quoteFeedOne);
+        if (feeds.quoteFeedTwo) feedAddresses.push(feeds.quoteFeedTwo);
+      }
+      if (metaSources?.backup) {
+        const feeds = metaSources.backup;
+        if (feeds.baseFeedOne) feedAddresses.push(feeds.baseFeedOne);
+        if (feeds.baseFeedTwo) feedAddresses.push(feeds.baseFeedTwo);
+        if (feeds.quoteFeedOne) feedAddresses.push(feeds.quoteFeedOne);
+        if (feeds.quoteFeedTwo) feedAddresses.push(feeds.quoteFeedTwo);
+      }
+    }
   }
 
   return feedAddresses;
+}
+
+async function bootstrapMetaOracles(
+  chainId: ChainId,
+  oracleAddresses: Address[],
+): Promise<MetaOracleBootstrapResult> {
+  const configsFromLogs = await fetchMetaOraclesFromLogs(chainId);
+  if (configsFromLogs.size === 0) {
+    return { addresses: oracleAddresses, configs: new Map() };
+  }
+
+  const metaAddresses = Array.from(configsFromLogs.keys());
+  const expanded = new Set<Address>(oracleAddresses);
+  const mergedConfigs = new Map<Address, MetaOracleDeviationTimelockConfig>(configsFromLogs);
+
+  for (const config of configsFromLogs.values()) {
+    if (config.primaryOracle) expanded.add(config.primaryOracle);
+    if (config.backupOracle) expanded.add(config.backupOracle);
+  }
+
+  const onchainConfigs = await fetchMetaOracleDeviationTimelockConfigs(chainId, metaAddresses);
+  for (const [address, config] of onchainConfigs.entries()) {
+    const existing = mergedConfigs.get(address);
+    if (!existing) {
+      mergedConfigs.set(address, config);
+      continue;
+    }
+    mergedConfigs.set(address, {
+      ...existing,
+      currentOracle: config.currentOracle,
+    });
+  }
+
+  return {
+    addresses: Array.from(expanded),
+    configs: mergedConfigs,
+  };
 }
 
 async function processOracle(
@@ -256,7 +347,13 @@ async function processOracle(
     contractState.classification?.kind === "MorphoChainlinkOracleV2" ||
     contractState.classification?.kind === "MorphoChainlinkOracleV1";
 
-  if (isStandard) {
+  if (contractState.classification?.kind === "MetaOracleDeviationTimelock") {
+    // Meta oracles are own contracts; still scan proxy status to detect upgrades.
+    if (!contractState.proxy) {
+      didProxyScan = true;
+      contractState.proxy = await scanProxyStatus(chainId, oracleAddress, now);
+    }
+  } else if (isStandard) {
     // Standard Morpho oracles are not proxies; skip proxy detection.
     contractState.proxy = null;
   } else {
@@ -269,7 +366,7 @@ async function processOracle(
 
   // Standard v1/v2 classification is set above. Everything else gets a cheap adapter check
   // which we intentionally re-run each scan (patterns can change between deployments).
-  if (!isStandard) {
+  if (!isStandard && contractState.classification?.kind !== "MetaOracleDeviationTimelock") {
     const proxyInfo = asProxyInfo(contractState.proxy);
     const impl = proxyInfo?.implementation ?? null;
     const customMatch = matchCustomAdapter(oracleAddress, impl, chainId);
@@ -288,9 +385,11 @@ async function processOracle(
       ? "standard-v2"
       : contractState.classification?.kind === "MorphoChainlinkOracleV1"
         ? "standard-v1"
-        : contractState.classification?.kind === "CustomAdapter"
-          ? "custom"
-          : "unknown";
+        : contractState.classification?.kind === "MetaOracleDeviationTimelock"
+          ? "meta"
+          : contractState.classification?.kind === "CustomAdapter"
+            ? "custom"
+            : "unknown";
 
   if (logPerOracle) {
     console.log(
@@ -332,6 +431,8 @@ async function scanProxyStatus(
 async function resolveStandardClassifications(
   chainId: ChainId,
   classificationTargets: Address[],
+  metaConfigs: Map<Address, MetaOracleDeviationTimelockConfig>,
+  cachedClassifications: Map<Address, OracleClassification>,
 ): Promise<Map<Address, OracleClassification>> {
   const resolved = new Map<Address, OracleClassification>();
 
@@ -339,16 +440,22 @@ async function resolveStandardClassifications(
     return resolved;
   }
 
+  const metaTargets = classificationTargets.filter((address) => metaConfigs.has(address));
+  const remainingTargets = classificationTargets.filter((address) => !metaConfigs.has(address));
+  if (remainingTargets.length === 0 && metaTargets.length === 0) {
+    return resolved;
+  }
+
   // Stage 1: Validate V2 by factory (batch).
-  const factoryVerifiedMap = await fetchFactoryVerifiedMap(chainId, classificationTargets);
-  const factoryV2Addresses = classificationTargets.filter((address) =>
+  const factoryVerifiedMap = await fetchFactoryVerifiedMap(chainId, remainingTargets);
+  const factoryV2Addresses = remainingTargets.filter((address) =>
     factoryVerifiedMap.get(address),
   );
-  const nonFactoryAddresses = classificationTargets.filter(
+  const nonFactoryAddresses = remainingTargets.filter(
     (address) => !factoryVerifiedMap.get(address),
   );
   console.log(
-    `  [classification] factory-verified-v2=${factoryV2Addresses.length}, non-factory=${nonFactoryAddresses.length}`,
+    `  [classification] factory-verified-v2=${factoryV2Addresses.length}, non-factory=${nonFactoryAddresses.length}, meta=${metaTargets.length}`,
   );
 
   // Stage 2: Fetch V2 feeds for factory-verified addresses (batch).
@@ -410,7 +517,49 @@ async function resolveStandardClassifications(
     `  [classification] bytecode-v1-with-feeds=${v1FeedsMap.size}, bytecode-v2-with-feeds=${v2FeedsMap.size}`,
   );
 
+  for (const address of metaTargets) {
+    const config = metaConfigs.get(address);
+    if (!config) continue;
+    resolved.set(address, {
+      kind: "MetaOracleDeviationTimelock",
+      verificationMethod: "factory",
+      config,
+      oracleSources: resolveMetaSourcesFromResolvedMap(resolved, cachedClassifications, config),
+    });
+  }
+
   return resolved;
+}
+
+function resolveMetaSourcesFromResolvedMap(
+  resolved: Map<Address, OracleClassification>,
+  cached: Map<Address, OracleClassification>,
+  config: MetaOracleDeviationTimelockConfig,
+): MetaOracleSources {
+  const primary = config.primaryOracle
+    ? resolved.get(config.primaryOracle) ?? cached.get(config.primaryOracle)
+    : undefined;
+  const backup = config.backupOracle
+    ? resolved.get(config.backupOracle) ?? cached.get(config.backupOracle)
+    : undefined;
+
+  return {
+    primary: extractStandardFeeds(primary),
+    backup: extractStandardFeeds(backup),
+  };
+}
+
+function extractStandardFeeds(
+  classification: OracleClassification | undefined,
+): StandardOracleFeeds | null {
+  if (!classification) return null;
+  if (classification.kind === "MorphoChainlinkOracleV1") {
+    return classification.feeds;
+  }
+  if (classification.kind === "MorphoChainlinkOracleV2") {
+    return classification.feeds;
+  }
+  return null;
 }
 
 async function rescanUpgradableOracles(
@@ -592,6 +741,36 @@ function buildOracleOutput(
     };
   }
 
+  if (classification?.kind === "MetaOracleDeviationTimelock") {
+    const config = classification.config;
+    const sources = classification.oracleSources;
+    const enrichedSources = sources
+      ? {
+          primary: sources.primary
+            ? enrichStandardFeeds(sources.primary, chainId, feedProviderMatcher)
+            : null,
+          backup: sources.backup
+            ? enrichStandardFeeds(sources.backup, chainId, feedProviderMatcher)
+            : null,
+        }
+      : undefined;
+
+    return {
+      ...base,
+      type: "meta",
+      verifiedByFactory: true,
+      data: {
+        primaryOracle: config.primaryOracle,
+        backupOracle: config.backupOracle,
+        currentOracle: config.currentOracle,
+        deviationThreshold: config.deviationThreshold,
+        challengeTimelockDuration: config.challengeTimelockDuration,
+        healingTimelockDuration: config.healingTimelockDuration,
+        oracleSources: enrichedSources,
+      },
+    };
+  }
+
   if (classification?.kind === "CustomAdapter") {
     const data: CustomOracleOutputData = {
       adapterId: classification.adapterId,
@@ -616,6 +795,19 @@ function buildOracleOutput(
     ...base,
     type: "unknown",
     data: { reason },
+  };
+}
+
+function enrichStandardFeeds(
+  feeds: StandardOracleFeeds,
+  chainId: ChainId,
+  feedProviderMatcher: FeedProviderMatcher,
+): StandardOracleOutputData {
+  return {
+    baseFeedOne: feedProviderMatcher.enrichFeed(feeds.baseFeedOne, chainId),
+    baseFeedTwo: feedProviderMatcher.enrichFeed(feeds.baseFeedTwo, chainId),
+    quoteFeedOne: feedProviderMatcher.enrichFeed(feeds.quoteFeedOne, chainId),
+    quoteFeedTwo: feedProviderMatcher.enrichFeed(feeds.quoteFeedTwo, chainId),
   };
 }
 
@@ -656,6 +848,7 @@ function buildMetadata(
     chains[chainId] = {
       oracleCount: oracles.length,
       standardCount: oracles.filter((o) => o.type === "standard").length,
+      metaCount: oracles.filter((o) => o.type === "meta").length,
       customCount: oracles.filter((o) => o.type === "custom").length,
       unknownCount: oracles.filter((o) => o.type === "unknown").length,
       upgradableCount: oracles.filter((o) => o.proxy.isProxy).length,
