@@ -6,6 +6,7 @@ export interface ChainConfig {
   rpcUrl: string;
   morphoChainlinkV2Factory: Address;
   metaOracleDeviationTimelockFactories: Address[];
+  pendleSparkLinearDiscountOracleFactories?: Address[];
 }
 
 export const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
@@ -20,6 +21,9 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
     metaOracleDeviationTimelockFactories: [
       "0xeC34e4e892061f368F915aDb9467B656ae5C42e8",
       "0x44d049eed4ad33807859c45bbd3a8eb47917a9f4",
+    ],
+    pendleSparkLinearDiscountOracleFactories: [
+      "0x34c91651a070664279866e5f3d6b4d5f65cbbffb",
     ],
   },
   8453: {

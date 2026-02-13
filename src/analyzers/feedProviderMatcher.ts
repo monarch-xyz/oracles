@@ -35,6 +35,7 @@ export class FeedProviderMatcher {
         pair: matched.pair || [],
         provider: matched.provider,
         pendleFeedKind: matched.pendleFeedKind,
+        pendleFeedSubtype: matched.pendleFeedSubtype,
         pendleOracleType: matched.pendleOracleType,
         twapDuration: matched.twapDuration,
         baseDiscountPerYear: matched.baseDiscountPerYear,

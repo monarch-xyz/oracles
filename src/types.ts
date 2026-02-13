@@ -116,6 +116,10 @@ export type FeedProvider =
   | "Unknown";
 
 export type PendleFeedKind = "LinearDiscount" | "ChainlinkOracle";
+export type PendleFeedSubtype =
+  | "LinearDiscountWrapper"
+  | "SparkLinearDiscountOracle"
+  | "ChainlinkOracle";
 export type PendleOracleType = "PT_TO_SY" | "PT_TO_ASSET" | "LP_TO_SY" | "LP_TO_ASSET";
 
 export interface FeedInfo {
@@ -125,6 +129,7 @@ export interface FeedInfo {
   description: string;
   pair: [string, string] | null;
   pendleFeedKind?: PendleFeedKind;
+  pendleFeedSubtype?: PendleFeedSubtype;
   pendleOracleType?: PendleOracleType;
   twapDuration?: number;
   baseDiscountPerYear?: string;
@@ -229,6 +234,7 @@ export interface EnrichedFeed {
   pair: [string, string] | [];
   provider: FeedProvider | null;
   pendleFeedKind?: PendleFeedKind;
+  pendleFeedSubtype?: PendleFeedSubtype;
   pendleOracleType?: PendleOracleType;
   twapDuration?: number;
   baseDiscountPerYear?: string;

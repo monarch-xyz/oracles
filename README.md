@@ -32,6 +32,35 @@ Supported feed providers:
 - Lido (hardcoded stETH rate feeds)
 - Oval (hardcoded wrapper feeds)
 - Pyth (hardcoded feeds)
+- Pendle (bytecode detection + factory events)
+
+### Oracle vs Feed (First Principles)
+
+Oracles are on-chain contracts that compute Morpho prices using one or more feeds.
+Feeds are on-chain price sources (Chainlink, Redstone, Pendle, etc.) that return raw
+price data. The scanner classifies oracles, then separately enriches feeds by provider.
+
+- Oracles live in `src/scanner.ts` and are classified into standard, meta, custom, or unknown.
+- Feeds are matched in `src/analyzers/feedProviderMatcher.ts` using provider registries.
+- Providers load their own registries in `src/sources/` and return `FeedInfo` objects.
+
+### Pendle Feeds
+
+Pendle feeds are part of the feed enrichment pipeline (not oracle classification) and are tagged
+with `pendleFeedKind` plus a `pendleFeedSubtype` for frontend-specific UX. All Pendle feeds
+set `provider: "Pendle"` and include PT metadata when available.
+
+Supported Pendle feed subtypes:
+- `LinearDiscountWrapper`: bytecode-detected wrapper that points to an inner linear discount oracle.
+- `SparkLinearDiscountOracle`: factory-event detected feed contract created by
+  `PendleSparkLinearDiscountOracleFactory` (mainnet: `0x34c91651a070664279866e5f3d6b4d5f65cbbffb`).
+- `ChainlinkOracle`: bytecode-detected Pendle Chainlink oracle feed.
+
+Pendle feed discovery flow:
+1. The scanner gathers feed addresses from classified Morpho oracles.
+2. The Pendle provider augments feed addresses with Spark Linear Discount oracles discovered from
+   factory events (`OracleCreated`) via Etherscan logs.
+3. Pendle feeds are enriched with PT symbols, pairs, and discount parameters before matching.
 
 ## Setup
 
@@ -113,6 +142,15 @@ pnpm run lint
 - `meta.json`: summary counts and provider stats
 - `_state.json`: scanner state used for incremental context and proxy tracking
 
+`oracles.{chainId}.json` includes feed metadata for standard oracles. Each feed is serialized as
+an `EnrichedFeed` object (see `src/types.ts`) with provider-specific fields. For Pendle feeds,
+the output includes:
+
+- `provider: "Pendle"`
+- `pendleFeedKind`: `LinearDiscount` or `ChainlinkOracle`
+- `pendleFeedSubtype`: `LinearDiscountWrapper`, `SparkLinearDiscountOracle`, or `ChainlinkOracle`
+- `baseDiscountPerYear`, `pt`, `ptSymbol`, plus optional oracle-type data (`pendleOracleType`, `twapDuration`)
+
 ## Current Source Layout
 
 ```text
@@ -124,6 +162,8 @@ src/
     factoryVerifier.ts               # V2 factory verification (batch)
     oracleBytecodeValidation.ts      # Bytecode validation stage (1-by-1)
     oracleFeedFetcher.ts             # V1/V2 feed multicalls (batch)
+    etherscanLogs.ts                 # Event log fetch helper (factory discovery)
+    hardcoded/pendle.ts              # Pendle feed enrichment + factory log discovery
     oracleV1Detector.ts              # V1 bytecode check
     oracleV2BytecodeDetector.ts      # V2 masked bytecode check
   bytecodes/
