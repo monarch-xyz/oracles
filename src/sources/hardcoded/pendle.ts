@@ -1,4 +1,4 @@
-import { type Hex, decodeEventLog, encodeEventTopics } from "viem";
+import { type Abi, type Hex, decodeEventLog, encodeEventTopics } from "viem";
 import { abi as ERC20_ABI } from "../../abi/erc20.js";
 import { abi as PENDLE_CHAINLINK_ORACLE_ABI } from "../../abi/pendle-chainlink-oracle-feed.js";
 import { abi as PENDLE_WRAPPER_ABI } from "../../abi/pendle-linear-discount-oracle-wrapper.js";
@@ -21,6 +21,7 @@ import {
 } from "../pendleFeedDetector.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const PENDLE_SPARK_ORACLE_ABI_TYPED = PENDLE_SPARK_ORACLE_ABI as Abi;
 const PENDLE_SPARK_FACTORY_EVENT = {
   name: "OracleCreated",
   type: "event",
@@ -387,8 +388,8 @@ async function fetchPendleSparkLinearDiscountFeeds(
 
   try {
     const contracts = feedAddresses.flatMap((address) => [
-      { address, abi: PENDLE_SPARK_ORACLE_ABI, functionName: "PT" },
-      { address, abi: PENDLE_SPARK_ORACLE_ABI, functionName: "baseDiscountPerYear" },
+      { address, abi: PENDLE_SPARK_ORACLE_ABI_TYPED, functionName: "PT" },
+      { address, abi: PENDLE_SPARK_ORACLE_ABI_TYPED, functionName: "baseDiscountPerYear" },
     ]);
 
     const results = (await client.multicall({
