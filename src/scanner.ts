@@ -9,6 +9,7 @@ import { ACTIVE_CHAINS, IMPL_RESCAN_INTERVAL_MS } from "./config.js";
 import { fetchChainlinkProvider } from "./sources/chainlink.js";
 import { fetchFactoryVerifiedMap } from "./sources/factoryVerifier.js";
 import {
+  fetchApi3Provider,
   fetchCompoundProvider,
   fetchLidoProvider,
   fetchOvalProvider,
@@ -106,6 +107,7 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     const metaConfigs = metaBootstrap.configs;
 
     // Load hardcoded providers
+    const api3Provider = fetchApi3Provider(chainId);
     const compoundProvider = fetchCompoundProvider(chainId);
     const lidoProvider = fetchLidoProvider(chainId);
     const ovalProvider = fetchOvalProvider(chainId);
@@ -121,6 +123,7 @@ export async function runScanner(options: RunScannerOptions = {}): Promise<void>
     // Add all providers to matcher
     feedProviderMatcher.addProvider(chainlinkProvider);
     feedProviderMatcher.addProvider(redstoneProvider);
+    feedProviderMatcher.addProvider(api3Provider);
     feedProviderMatcher.addProvider(compoundProvider);
     feedProviderMatcher.addProvider(lidoProvider);
     feedProviderMatcher.addProvider(ovalProvider);
