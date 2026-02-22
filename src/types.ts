@@ -108,6 +108,7 @@ export type FeedProvider =
   | "Redstone"
   | "Chronicle"
   | "Pyth"
+  | "API3"
   | "Oval"
   | "Lido"
   | "Compound"
