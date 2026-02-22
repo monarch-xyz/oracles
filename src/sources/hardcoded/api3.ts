@@ -12,7 +12,6 @@ const API3_FEEDS: Record<ChainId, FeedInfo[]> = {
       description: "API3: cbBTC / USD",
       pair: ["cbBTC", "USD"],
       decimals: 18,
-      heartbeat: 86400, // 24h — standard API3 dAPI heartbeat
     },
     {
       address: "0x8E5e906761677E24D3AFd77DB6A19Dd9ed83F8c2" as Address,
@@ -21,7 +20,6 @@ const API3_FEEDS: Record<ChainId, FeedInfo[]> = {
       description: "API3: USDC / USD",
       pair: ["USDC", "USD"],
       decimals: 18,
-      heartbeat: 86400,
     },
     {
       address: "0xeC4031539b851eEc918b41FE3e03d7236fEc7be8" as Address,
@@ -30,7 +28,6 @@ const API3_FEEDS: Record<ChainId, FeedInfo[]> = {
       description: "API3: wstETH / USD",
       pair: ["wstETH", "USD"],
       decimals: 18,
-      heartbeat: 86400,
     },
     {
       address: "0x4C7A561D15001C6ee5E05996591419b11962fa1A" as Address,
@@ -39,7 +36,6 @@ const API3_FEEDS: Record<ChainId, FeedInfo[]> = {
       description: "API3: USDC / USD",
       pair: ["USDC", "USD"],
       decimals: 18,
-      heartbeat: 86400,
     },
   ],
   8453: [],
